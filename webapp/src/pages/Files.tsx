@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { FolderOpen, Search, Upload, ChevronLeft, ChevronRight, Folder } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -81,7 +82,12 @@ export default function Files() {
               />
             </div>
             
-            <Button className="bg-white text-background hover:bg-white/90 gap-2">
+            <Button
+              className="bg-white text-background hover:bg-white/90 gap-2"
+              onClick={() => toast.info('File upload coming soon', {
+                description: 'This feature will allow you to upload and manage PDF files.',
+              })}
+            >
               <Upload className="w-4 h-4" />
               Add file
             </Button>

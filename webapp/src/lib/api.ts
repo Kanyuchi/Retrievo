@@ -47,6 +47,20 @@ export interface QueryRequest {
   year_max?: number;
 }
 
+export interface ChatResponse {
+  question: string;
+  answer: string;
+  sources: Array<{
+    citation_number: number;
+    authors: string;
+    year: number | string;
+    title: string;
+    doc_id: string;
+  }>;
+  model: string;
+  filters_applied: Record<string, string>;
+}
+
 export interface QueryResponse {
   answer: string;
   documents: Array<{
@@ -128,12 +142,15 @@ class ApiClient {
     return this.fetch(`/api/search?${searchParams.toString()}`);
   }
 
-  // Query (for chat)
-  async query(request: QueryRequest): Promise<QueryResponse> {
-    return this.fetch('/query', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+  // Query (for chat) - uses LLM-powered /api/chat endpoint
+  async query(request: QueryRequest): Promise<ChatResponse> {
+    const searchParams = new URLSearchParams();
+    searchParams.set('question', request.question);
+    if (request.n_results) searchParams.set('n_sources', request.n_results.toString());
+    if (request.phase_filter) searchParams.set('phase_filter', request.phase_filter);
+    if (request.topic_filter) searchParams.set('topic_filter', request.topic_filter);
+
+    return this.fetch(`/api/chat?${searchParams.toString()}`);
   }
 
   // Health check

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import SettingsSidebar from '@/components/SettingsSidebar';
 import { Card } from '@/components/ui/card';
+import { toast } from 'sonner';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -124,7 +125,12 @@ export default function DataSources() {
               whileHover={{ y: -4, borderColor: source.color }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="p-5 bg-card border-border hover:shadow-lg transition-all cursor-pointer group">
+              <Card
+                className="p-5 bg-card border-border hover:shadow-lg transition-all cursor-pointer group"
+                onClick={() => toast.info(`${source.name} integration coming soon`, {
+                  description: source.description,
+                })}
+              >
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0">{source.icon}</div>
                   <div className="flex-1 min-w-0">

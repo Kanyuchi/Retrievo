@@ -90,10 +90,10 @@ export default function Chat() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.synthesis || response.answer,
-        sources: response.documents.map(doc => ({
-          title: doc.metadata.title,
-          score: doc.score,
+        content: response.answer,
+        sources: response.sources?.map(source => ({
+          title: source.title,
+          score: source.citation_number / 10, // Convert citation number to a score-like display
         })),
       };
 

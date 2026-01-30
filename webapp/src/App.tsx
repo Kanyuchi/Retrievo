@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { Toaster } from 'sonner';
 import MainNav from './components/MainNav';
 import Home from './pages/Home';
 import Dataset from './pages/Dataset';
@@ -18,6 +19,17 @@ function App() {
     <Router>
       <div className="min-h-screen bg-background">
         <MainNav />
+        <Toaster
+          position="top-right"
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border))',
+              color: 'hsl(var(--foreground))',
+            },
+          }}
+        />
         <main className="pt-[72px]">
           <AnimatePresence mode="wait">
             <Routes>

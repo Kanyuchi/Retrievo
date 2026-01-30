@@ -262,14 +262,25 @@ async def get_stats():
     try:
         stats = rag_system.get_stats()
 
+        # Calculate year range from metadata
+        all_data = rag_system.collection.get(include=["metadatas"])
+        years = []
+        for meta in all_data["metadatas"]:
+            year = meta.get("year")
+            if year and isinstance(year, int) and year > 1900:
+                years.append(year)
+
+        year_min = min(years) if years else 0
+        year_max = max(years) if years else 0
+
         return {
-            "total_papers": stats.get("total_documents", 0),
+            "total_papers": stats.get("total_papers", 0),
             "total_chunks": stats.get("total_chunks", 0),
             "phases": stats.get("papers_by_phase", {}),
             "topics": stats.get("papers_by_topic", {}),
             "year_range": {
-                "min": stats.get("year_range", {}).get("min", 0),
-                "max": stats.get("year_range", {}).get("max", 0)
+                "min": year_min,
+                "max": year_max
             }
         }
     except Exception as e:

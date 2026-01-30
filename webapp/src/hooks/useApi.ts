@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, type SearchResult, type QueryResponse, type QueryRequest } from '@/lib/api';
+import { api, type SearchResult, type ChatResponse, type QueryRequest } from '@/lib/api';
 
 // Generic hook for API calls
 function useApiCall<T>(fetchFn: () => Promise<T>, deps: unknown[] = []) {
@@ -91,7 +91,7 @@ export function useSearch() {
 
 // Hook for query (chat)
 export function useQuery() {
-  const [response, setResponse] = useState<QueryResponse | null>(null);
+  const [response, setResponse] = useState<ChatResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

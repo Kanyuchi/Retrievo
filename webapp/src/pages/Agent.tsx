@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Bot, Filter, Search, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,7 +66,12 @@ export default function Agent() {
               />
             </div>
             
-            <Button className="bg-white text-background hover:bg-white/90 gap-2">
+            <Button
+              className="bg-white text-background hover:bg-white/90 gap-2"
+              onClick={() => toast.info('Agent creation coming soon', {
+                description: 'This feature will allow you to create custom research agents.',
+              })}
+            >
               <Plus className="w-4 h-4" />
               Create agent
             </Button>

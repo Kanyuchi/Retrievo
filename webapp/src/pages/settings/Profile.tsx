@@ -3,6 +3,7 @@ import SettingsSidebar from '@/components/SettingsSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Pencil, X, User } from 'lucide-react';
+import { toast } from 'sonner';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -48,12 +49,17 @@ export default function Profile() {
             <div className="flex items-start gap-8">
               <label className="w-24 pt-2 text-sm text-foreground">Name</label>
               <div className="flex-1 flex items-center gap-3">
-                <Input 
-                  value="Kanyuchi" 
+                <Input
+                  value="Kanyuchi"
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
                 />
-                <Button variant="outline" size="icon" className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0"
+                  onClick={() => toast.info('Profile editing coming soon')}
+                >
                   <Pencil className="w-4 h-4" />
                 </Button>
               </div>
@@ -79,12 +85,17 @@ export default function Profile() {
             <div className="flex items-start gap-8">
               <label className="w-24 pt-2 text-sm text-foreground">Time zone</label>
               <div className="flex-1 flex items-center gap-3">
-                <Input 
-                  value="UTC+8 Asia/Shanghai" 
+                <Input
+                  value="UTC+8 Asia/Shanghai"
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
                 />
-                <Button variant="outline" size="icon" className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0"
+                  onClick={() => toast.info('Profile editing coming soon')}
+                >
                   <Pencil className="w-4 h-4" />
                 </Button>
               </div>
@@ -103,13 +114,18 @@ export default function Profile() {
             <div className="flex items-start gap-8">
               <label className="w-24 pt-2 text-sm text-foreground">Password</label>
               <div className="flex-1 flex items-center gap-3">
-                <Input 
+                <Input
                   type="password"
-                  value="********" 
+                  value="********"
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
                 />
-                <Button variant="outline" size="icon" className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="border-border bg-secondary/50 hover:bg-secondary flex-shrink-0"
+                  onClick={() => toast.info('Profile editing coming soon')}
+                >
                   <Pencil className="w-4 h-4" />
                 </Button>
               </div>
