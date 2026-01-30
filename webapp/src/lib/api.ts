@@ -1,14 +1,69 @@
-import type {
-  CollectionStats,
-  ListPapersResponse,
-  SearchResult,
-  AnswerWithCitations,
-  SynthesisResult,
-  Paper,
-  SemanticSearchParams,
-} from "@/types/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+export interface StatsResponse {
+  total_papers: number;
+  total_chunks: number;
+  phases: Record<string, number>;
+  topics: Record<string, number>;
+  year_range: {
+    min: number;
+    max: number;
+  };
+}
+
+export interface Paper {
+  doc_id: string;
+  title: string;
+  authors?: string;
+  year?: number;
+  phase?: string;
+  topic?: string;
+  source?: string;
+}
+
+export interface PapersResponse {
+  total: number;
+  papers: Paper[];
+}
+
+export interface SearchResult {
+  doc_id: string;
+  title: string;
+  authors?: string;
+  year?: number;
+  phase?: string;
+  topic?: string;
+  chunk_text: string;
+  relevance_score: number;
+}
+
+export interface QueryRequest {
+  question: string;
+  n_results?: number;
+  synthesis_mode?: 'paragraph' | 'bullet_points' | 'structured';
+  phase_filter?: string;
+  topic_filter?: string;
+  year_min?: number;
+  year_max?: number;
+}
+
+export interface QueryResponse {
+  answer: string;
+  documents: Array<{
+    content: string;
+    metadata: {
+      doc_id: string;
+      title: string;
+      authors?: string;
+      year?: number;
+      phase?: string;
+      topic_category?: string;
+      filename?: string;
+    };
+    score: number;
+  }>;
+  synthesis?: string;
+}
 
 class ApiClient {
   private baseUrl: string;
@@ -17,115 +72,73 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  private async fetch<T>(
-    endpoint: string,
-    options?: RequestInit
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
+  private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options?.headers,
       },
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
     return response.json();
   }
 
-  // Collection Stats
-  async getCollectionStats(): Promise<CollectionStats> {
-    return this.fetch<CollectionStats>("/api/stats");
+  // Stats
+  async getStats(): Promise<StatsResponse> {
+    return this.fetch('/api/stats');
   }
 
-  // List Papers
-  async listPapers(params?: {
+  // Papers
+  async getPapers(params?: {
     phase_filter?: string;
     topic_filter?: string;
     limit?: number;
-  }): Promise<ListPapersResponse> {
+  }): Promise<PapersResponse> {
     const searchParams = new URLSearchParams();
-    if (params?.phase_filter) searchParams.set("phase_filter", params.phase_filter);
-    if (params?.topic_filter) searchParams.set("topic_filter", params.topic_filter);
-    if (params?.limit) searchParams.set("limit", String(params.limit));
-
-    const query = searchParams.toString();
-    return this.fetch<ListPapersResponse>(`/api/papers${query ? `?${query}` : ""}`);
+    if (params?.phase_filter) searchParams.set('phase_filter', params.phase_filter);
+    if (params?.topic_filter) searchParams.set('topic_filter', params.topic_filter);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    
+    return this.fetch(`/api/papers?${searchParams.toString()}`);
   }
 
   // Semantic Search
-  async semanticSearch(params: SemanticSearchParams): Promise<SearchResult[]> {
-    const searchParams = new URLSearchParams();
-    searchParams.set("query", params.query);
-    if (params.n_results) searchParams.set("n_results", String(params.n_results));
-    if (params.phase_filter) searchParams.set("phase_filter", params.phase_filter);
-    if (params.topic_filter) searchParams.set("topic_filter", params.topic_filter);
-    if (params.year_min) searchParams.set("year_min", String(params.year_min));
-    if (params.year_max) searchParams.set("year_max", String(params.year_max));
-
-    return this.fetch<SearchResult[]>(`/api/search?${searchParams.toString()}`);
-  }
-
-  // Get Context for LLM
-  async getContextForLLM(params: {
+  async search(params: {
     query: string;
     n_results?: number;
     phase_filter?: string;
     topic_filter?: string;
-  }): Promise<string> {
+    year_min?: number;
+    year_max?: number;
+  }): Promise<SearchResult[]> {
     const searchParams = new URLSearchParams();
-    searchParams.set("query", params.query);
-    if (params.n_results) searchParams.set("n_results", String(params.n_results));
-    if (params.phase_filter) searchParams.set("phase_filter", params.phase_filter);
-    if (params.topic_filter) searchParams.set("topic_filter", params.topic_filter);
-
-    return this.fetch<string>(`/api/context?${searchParams.toString()}`);
+    searchParams.set('query', params.query);
+    if (params.n_results) searchParams.set('n_results', params.n_results.toString());
+    if (params.phase_filter) searchParams.set('phase_filter', params.phase_filter);
+    if (params.topic_filter) searchParams.set('topic_filter', params.topic_filter);
+    if (params.year_min) searchParams.set('year_min', params.year_min.toString());
+    if (params.year_max) searchParams.set('year_max', params.year_max.toString());
+    
+    return this.fetch(`/api/search?${searchParams.toString()}`);
   }
 
-  // Answer with Citations
-  async answerWithCitations(params: {
-    question: string;
-    n_sources?: number;
-    phase_filter?: string;
-    topic_filter?: string;
-  }): Promise<AnswerWithCitations> {
-    const searchParams = new URLSearchParams();
-    searchParams.set("question", params.question);
-    if (params.n_sources) searchParams.set("n_sources", String(params.n_sources));
-    if (params.phase_filter) searchParams.set("phase_filter", params.phase_filter);
-    if (params.topic_filter) searchParams.set("topic_filter", params.topic_filter);
-
-    return this.fetch<AnswerWithCitations>(`/api/answer?${searchParams.toString()}`);
-  }
-
-  // Find Related Papers
-  async findRelatedPapers(params: {
-    paper_id: string;
-    n_results?: number;
-  }): Promise<{ source_paper_id: string; related_papers: Paper[] }> {
-    const searchParams = new URLSearchParams();
-    searchParams.set("paper_id", params.paper_id);
-    if (params.n_results) searchParams.set("n_results", String(params.n_results));
-
-    return this.fetch<{ source_paper_id: string; related_papers: Paper[] }>(
-      `/api/related?${searchParams.toString()}`
-    );
-  }
-
-  // Synthesis Query
-  async synthesisQuery(params: {
-    question: string;
-    topics: string[];
-    n_per_topic?: number;
-  }): Promise<SynthesisResult> {
-    return this.fetch<SynthesisResult>("/api/synthesis", {
-      method: "POST",
-      body: JSON.stringify(params),
+  // Query (for chat)
+  async query(request: QueryRequest): Promise<QueryResponse> {
+    return this.fetch('/query', {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
+  }
+
+  // Health check
+  async health(): Promise<{ status: string; rag_ready: boolean }> {
+    return this.fetch('/health');
   }
 }
 
