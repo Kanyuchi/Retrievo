@@ -303,6 +303,19 @@ class AcademicPDFExtractor:
         filename = metadata.filename
         stem = Path(filename).stem
 
+        # Words that are NOT author names (common in filenames)
+        excluded_filename_words = {
+            'the', 'and', 'for', 'with', 'from', 'introduction', 'chapter',
+            'paper', 'article', 'draft', 'final', 'revised', 'version',
+            'germany', 'german', 'european', 'regional', 'economic', 'policy',
+            'business', 'formation', 'development', 'industrial', 'social',
+            'deindustrialization', 'entrepreneurship', 'transition', 'ruhr',
+            'how', 'what', 'why', 'lessons', 'mapping', 'analysis', 'review',
+            'world', 'resources', 'institute', 'center', 'university',
+            'covid', 'pandemic', 'emerging', 'trends', 'varieties', 'capitalism',
+            'an', 'of', 'in', 'to', 'on', 'at', 'by', 'is', 'as', 'or',
+        }
+
         # Try to extract year from filename
         year_match = re.search(r'\b((?:19|20)\d{2})\b', stem)
         if year_match:
@@ -310,18 +323,41 @@ class AcademicPDFExtractor:
             if 1950 <= year <= datetime.now().year:
                 metadata.year = year
 
-        # Try to extract author from filename patterns like "2012_Thelen_" or "Thelen_2012"
+        # Try to extract author from filename patterns
         author_patterns = [
-            r'^\d{4}[_\-\s]+([A-Z][a-z]+)',  # Year_Author
-            r'^([A-Z][a-z]+)[_\-\s]+\d{4}',  # Author_Year
-            r'^([A-Z][a-z]+(?:[_\-\s]+[A-Z][a-z]+)?)[_\-\s]',  # Author_Author_ at start
+            # "2012_Thelen_Varieties" or "2012-Thelen-Varieties"
+            r'^\d{4}[_\-\s]+([A-Z][a-z]{2,20})',
+            # "Thelen_2012" or "Thelen-2012"
+            r'^([A-Z][a-z]{2,20})[_\-\s]+\d{4}',
+            # "Thelen_Hall_2012" (multiple authors)
+            r'^([A-Z][a-z]{2,20})[_\-\s]+([A-Z][a-z]{2,20})[_\-\s]+\d{4}',
+            # "hall2015_emergingtrends" (lowercase author + year)
+            r'^([a-z]{3,20})(\d{4})',
         ]
+
         for pattern in author_patterns:
             match = re.search(pattern, stem)
             if match:
-                author_name = match.group(1).replace('_', ' ').replace('-', ' ')
-                if len(author_name) > 2 and author_name.lower() not in ['the', 'and', 'for']:
-                    metadata.authors = [author_name]
+                # Handle multiple capture groups
+                groups = [g for g in match.groups() if g and not g.isdigit()]
+
+                valid_authors = []
+                for author_name in groups:
+                    # Clean up the name
+                    author_name = author_name.replace('_', ' ').replace('-', ' ').strip()
+                    # Capitalize first letter if lowercase
+                    if author_name[0].islower():
+                        author_name = author_name.capitalize()
+
+                    # Validate it's likely an author name
+                    name_lower = author_name.lower()
+                    if (len(author_name) >= 3 and
+                        name_lower not in excluded_filename_words and
+                        not any(c.isdigit() for c in author_name)):
+                        valid_authors.append(author_name)
+
+                if valid_authors:
+                    metadata.authors = valid_authors
                     break
 
     def _extract_title_from_text(self, text: str) -> Optional[str]:
@@ -364,36 +400,96 @@ class AcademicPDFExtractor:
         return None
 
     def _extract_authors_from_text(self, text: str) -> Optional[List[str]]:
-        """Extract authors from first pages text."""
-        # Common author section patterns
-        author_patterns = [
-            # "by Author Name" or "By Author Name"
-            r'(?i)\bby\s+([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)',
-            # "Author Name¹" (with superscript)
-            r'([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)[\s]*[¹²³⁴⁵\*†‡]',
-            # Multiple authors with "and"
-            r'([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s+and\s+([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)',
-        ]
+        """Extract authors from first pages text with improved accuracy."""
+        # Words that are definitely NOT author names
+        excluded_words = {
+            # Common academic words
+            'abstract', 'introduction', 'methods', 'results', 'discussion', 'conclusion',
+            'references', 'acknowledgments', 'keywords', 'background', 'analysis',
+            # Common title/content words
+            'how', 'what', 'why', 'when', 'where', 'which', 'about', 'lessons', 'mapping',
+            'quality', 'regional', 'drivers', 'managing', 'transition', 'economic',
+            'deindustrialization', 'entrepreneurship', 'business', 'formation', 'germany',
+            'german', 'european', 'policy', 'development', 'industrial', 'social',
+            'political', 'institutional', 'comparative', 'empirical', 'theoretical',
+            'understanding', 'examining', 'exploring', 'analyzing', 'review', 'study',
+            'research', 'paper', 'article', 'journal', 'volume', 'issue', 'page',
+            'university', 'institute', 'center', 'department', 'school', 'faculty',
+            'covid', 'pandemic', 'crisis', 'impact', 'effects', 'challenges',
+            # Common first words
+            'the', 'and', 'for', 'with', 'from', 'this', 'that', 'these', 'those',
+            'new', 'old', 'first', 'second', 'third', 'last', 'next', 'previous',
+            # Organization words
+            'world', 'national', 'international', 'global', 'local', 'public', 'private',
+        }
+
+        # Check first 2500 chars for author patterns
+        search_text = text[:2500]
 
         authors = []
-        for pattern in author_patterns:
-            matches = re.findall(pattern, text[:3000])  # Only check first 3000 chars
-            for match in matches:
-                if isinstance(match, tuple):
-                    authors.extend(match)
-                else:
-                    authors.append(match)
 
-        # Clean and deduplicate
+        # Pattern 1: "by FirstName LastName" or "By FirstName M. LastName"
+        by_pattern = r'(?i)\bby\s+([A-Z][a-z]{2,15}(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]{2,20})'
+        by_matches = re.findall(by_pattern, search_text)
+        authors.extend(by_matches)
+
+        # Pattern 2: Names with academic affiliations nearby (superscripts, asterisks)
+        affiliation_pattern = r'([A-Z][a-z]{2,15}\s+(?:[A-Z]\.\s*)?[A-Z][a-z]{2,20})[\s]*[¹²³⁴⁵⁶⁷⁸⁹\*†‡§\d,]'
+        affil_matches = re.findall(affiliation_pattern, search_text)
+        authors.extend(affil_matches)
+
+        # Pattern 3: "FirstName LastName and FirstName LastName"
+        and_pattern = r'([A-Z][a-z]{2,15}\s+(?:[A-Z]\.\s*)?[A-Z][a-z]{2,20})\s+and\s+([A-Z][a-z]{2,15}\s+(?:[A-Z]\.\s*)?[A-Z][a-z]{2,20})'
+        and_matches = re.findall(and_pattern, search_text)
+        for match in and_matches:
+            authors.extend(match)
+
+        # Pattern 4: Names followed by email domain pattern
+        email_pattern = r'([A-Z][a-z]{2,15}\s+(?:[A-Z]\.\s*)?[A-Z][a-z]{2,20})[\s\n]*(?:[\w.]+@)'
+        email_matches = re.findall(email_pattern, search_text)
+        authors.extend(email_matches)
+
+        # Clean and validate authors
         clean_authors = []
         seen = set()
+
         for author in authors:
             author = author.strip()
-            # Skip if too short or looks like a word
-            if len(author) < 4 or author.lower() in ['the', 'and', 'for', 'with']:
+
+            # Must have at least 2 parts (first and last name)
+            parts = author.split()
+            if len(parts) < 2:
                 continue
-            if author.lower() not in seen:
-                seen.add(author.lower())
+
+            # Check each part isn't an excluded word
+            is_valid = True
+            for part in parts:
+                part_clean = re.sub(r'[^a-zA-Z]', '', part).lower()
+                if part_clean in excluded_words or len(part_clean) < 2:
+                    is_valid = False
+                    break
+
+            if not is_valid:
+                continue
+
+            # Skip if name is too short overall
+            if len(author) < 5:
+                continue
+
+            # Skip if starts with excluded word
+            first_word = parts[0].lower()
+            if first_word in excluded_words:
+                continue
+
+            # Skip if it looks like a title (too many capital letters)
+            caps_ratio = sum(1 for c in author if c.isupper()) / len(author)
+            if caps_ratio > 0.5:  # More than 50% uppercase is suspicious
+                continue
+
+            # Add to clean list if not seen
+            author_key = author.lower()
+            if author_key not in seen:
+                seen.add(author_key)
                 clean_authors.append(author)
 
         return clean_authors[:5] if clean_authors else None
