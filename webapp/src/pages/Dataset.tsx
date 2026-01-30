@@ -50,11 +50,6 @@ export default function Dataset() {
   const { data: papersData, loading, error } = usePapers({ limit: 100 });
   const { data: stats } = useStats();
 
-  // Debug logging
-  console.log('Papers data:', papersData);
-  console.log('Loading:', loading);
-  console.log('Error:', error);
-
   // Filter papers based on search and filters
   const filteredPapers = papersData?.papers?.filter(paper => {
     const matchesSearch = !searchQuery || 

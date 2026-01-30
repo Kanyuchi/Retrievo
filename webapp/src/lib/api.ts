@@ -87,7 +87,6 @@ class ApiClient {
   }
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    console.log('[ApiClient] Fetching:', `${this.baseUrl}${endpoint}`);
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers: {
@@ -96,20 +95,12 @@ class ApiClient {
       },
     });
 
-    console.log('[ApiClient] Response status:', response.status, response.ok);
-
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('[ApiClient] Parsed data:', data);
-    console.log('[ApiClient] Data type:', typeof data, Array.isArray(data) ? 'array' : 'object');
-    if (data && typeof data === 'object') {
-      console.log('[ApiClient] Data keys:', Object.keys(data));
-    }
-    return data;
+    return response.json();
   }
 
   // Stats
