@@ -139,16 +139,6 @@ export default function Dataset() {
           </div>
         </motion.div>
 
-        {/* Debug Info - remove after testing */}
-        <div className="mb-4 p-4 bg-secondary/30 rounded-lg text-sm">
-          <p>Loading: {loading ? 'true' : 'false'}</p>
-          <p>Error: {error || 'none'}</p>
-          <p>Papers data exists: {papersData ? 'yes' : 'no'}</p>
-          <p>Papers array exists: {papersData?.papers ? 'yes' : 'no'}</p>
-          <p>Papers count: {papersData?.papers?.length ?? 'N/A'}</p>
-          <p>Filtered count: {filteredPapers.length}</p>
-        </div>
-
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-32">
@@ -167,9 +157,8 @@ export default function Dataset() {
 
         {/* Papers Table */}
         {!loading && !error && (
-          <motion.div variants={itemVariants}>
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
+          <div className="rounded-lg border border-border overflow-hidden">
+            <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/30 hover:bg-secondary/30 border-border">
                     <TableHead className="text-muted-foreground font-medium">Paper</TableHead>
@@ -224,7 +213,6 @@ export default function Dataset() {
                 </TableBody>
               </Table>
             </div>
-          </motion.div>
         )}
 
         {/* Pagination */}
