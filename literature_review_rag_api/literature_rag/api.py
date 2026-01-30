@@ -519,10 +519,16 @@ async def api_chat_with_llm(
 
         context = "\n".join(context_parts)
 
+        # Build citation reference for LLM
+        citation_refs = []
+        for s in sources:
+            citation_refs.append(f"[{s['citation_number']}] = {s['authors']} ({s['year']}). {s['title']}")
+        citation_guide = "\n".join(citation_refs)
+
         # Build prompt for LLM
         system_prompt = """You are an expert academic research assistant specializing in German regional economic transitions, institutional economics, and the Ruhr Valley transformation.
 
-Answer questions based ONLY on the provided academic literature context. Always cite sources using the citation numbers provided (e.g., [1], [2]).
+Answer questions based ONLY on the provided academic literature context. When citing sources, use the author-date format with citation number, like: "According to Author (Year) [1], ..." or "...as noted by Author (Year) [2]".
 
 Be precise, academic in tone, and synthesize information across multiple sources when relevant. If the context doesn't contain enough information to fully answer the question, acknowledge this limitation."""
 
@@ -530,10 +536,13 @@ Be precise, academic in tone, and synthesize information across multiple sources
 
 QUESTION: {question}
 
+CITATION KEY:
+{citation_guide}
+
 ACADEMIC LITERATURE CONTEXT:
 {context}
 
-Please provide a well-structured answer with citations."""
+Please provide a well-structured answer using author-date citations (e.g., "According to Smith (2020) [1], ..."). Always include the author name and year when citing."""
 
         # Call Groq API
         chat_completion = groq_client.chat.completions.create(

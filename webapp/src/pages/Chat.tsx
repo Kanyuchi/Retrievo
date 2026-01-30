@@ -92,8 +92,8 @@ export default function Chat() {
         role: 'assistant',
         content: response.answer,
         sources: response.sources?.map(source => ({
-          title: source.title,
-          score: source.citation_number / 10, // Convert citation number to a score-like display
+          title: `[${source.citation_number}] ${source.authors} (${source.year}). ${source.title}`,
+          score: source.citation_number,
         })),
       };
 
@@ -233,13 +233,15 @@ export default function Chat() {
                         </Card>
                         
                         {message.sources && message.sources.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <span className="text-xs text-muted-foreground">Sources:</span>
-                            {message.sources.map((source, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs bg-secondary/30">
-                                {source.title} ({(source.score * 100).toFixed(0)}%)
-                              </Badge>
-                            ))}
+                          <div className="mt-3 pt-3 border-t border-border/50">
+                            <span className="text-xs text-muted-foreground block mb-2">References:</span>
+                            <div className="space-y-1">
+                              {message.sources.map((source, idx) => (
+                                <p key={idx} className="text-xs text-muted-foreground">
+                                  {source.title}
+                                </p>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
