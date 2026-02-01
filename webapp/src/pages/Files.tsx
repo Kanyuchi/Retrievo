@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   FolderOpen, Search, Upload, ChevronLeft, ChevronRight,
-  FileText, Trash2, X, AlertCircle, CheckCircle, Loader2
+  FileText, Trash2, X, AlertCircle, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,8 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { api, DocumentInfo, UploadConfigResponse } from '@/lib/api';
+import { api } from '@/lib/api';
+import type { DocumentInfo, UploadConfigResponse } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
