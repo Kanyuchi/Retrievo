@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-from fastapi import FastAPI, HTTPException, status, Depends, Request, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, status, Depends, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import APIKeyHeader, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,6 +41,7 @@ from .models import (
     DeleteResponse
 )
 from .indexer import DocumentIndexer, create_indexer_from_rag
+from .tasks import task_store, TaskStatus, process_pdf_task, run_async_task
 
 # Setup logging
 logging.basicConfig(
@@ -1117,6 +1118,144 @@ async def upload_pdf(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+@app.post("/api/upload/async")
+async def upload_pdf_async(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="PDF file to upload"),
+    phase: str = Form(..., description="Phase (e.g., 'Phase 1', 'Phase 2')"),
+    topic: str = Form(..., description="Topic category (e.g., 'Business Formation')")
+):
+    """
+    Upload a PDF file for asynchronous processing.
+
+    Returns a task_id immediately. Use GET /api/upload/{task_id}/status to check progress.
+    Recommended for large PDFs where you want to track progress.
+    """
+    check_rag_ready()
+    check_upload_enabled()
+
+    upload_config = config.upload
+
+    # Validate file extension
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename is required"
+        )
+
+    file_ext = Path(file.filename).suffix.lower()
+    allowed_extensions = getattr(upload_config, 'allowed_extensions', ['.pdf'])
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: {allowed_extensions}"
+        )
+
+    # Check file size
+    max_size = getattr(upload_config, 'max_file_size', 52428800)
+    contents = await file.read()
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB"
+        )
+
+    # Generate unique ID and save to temp
+    upload_id = str(uuid.uuid4())[:8]
+    temp_path = Path(upload_config.temp_path)
+    temp_path.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_path / f"{upload_id}_{file.filename}"
+
+    try:
+        # Write file to temp location
+        with open(temp_file, "wb") as f:
+            f.write(contents)
+
+        logger.info(f"Saved temp file for async processing: {temp_file}")
+
+        # Create task
+        task = task_store.create_task(
+            filename=file.filename,
+            phase=phase,
+            topic=topic,
+            temp_file_path=str(temp_file)
+        )
+
+        # Get phase name from config
+        phase_names = get_phase_names()
+        phase_name = phase_names.get(phase, phase)
+
+        # Schedule background processing
+        storage_path = Path(upload_config.storage_path)
+
+        background_tasks.add_task(
+            run_async_task,
+            process_pdf_task(
+                task_id=task.task_id,
+                indexer=document_indexer,
+                temp_file_path=temp_file,
+                phase=phase,
+                phase_name=phase_name,
+                topic=topic,
+                storage_path=storage_path,
+                filename=file.filename
+            )
+        )
+
+        return {
+            "task_id": task.task_id,
+            "status": task.status.value,
+            "message": "Upload accepted, processing started",
+            "filename": file.filename,
+            "phase": phase,
+            "topic": topic
+        }
+
+    except Exception as e:
+        logger.error(f"Async upload failed: {e}")
+        # Cleanup temp file
+        if temp_file.exists():
+            temp_file.unlink()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.get("/api/upload/{task_id}/status")
+async def get_upload_status(task_id: str):
+    """
+    Get the status of an async upload task.
+
+    Returns current progress, status, and result (if completed).
+    Poll this endpoint to track upload progress.
+    """
+    task = task_store.get_task(task_id)
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task not found: {task_id}"
+        )
+
+    return task.to_dict()
+
+
+@app.get("/api/upload/tasks")
+async def list_upload_tasks(limit: int = 20):
+    """
+    List recent upload tasks.
+
+    Returns the most recent upload tasks with their status.
+    """
+    tasks = task_store.list_tasks(limit=limit)
+    return {
+        "total": len(tasks),
+        "tasks": [t.to_dict() for t in tasks]
+    }
 
 
 @app.get("/api/documents", response_model=DocumentListResponse)

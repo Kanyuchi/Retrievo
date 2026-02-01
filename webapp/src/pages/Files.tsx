@@ -40,7 +40,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api';
-import type { DocumentInfo, UploadConfigResponse } from '@/lib/api';
+import type { DocumentInfo, UploadConfigResponse, TaskStatusResponse } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -79,6 +79,7 @@ export default function Files() {
   const [customTopic, setCustomTopic] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadMessage, setUploadMessage] = useState('');
 
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
@@ -186,24 +187,39 @@ export default function Files() {
     try {
       setUploading(true);
       setUploadProgress(0);
+      setUploadMessage('Uploading file...');
 
-      const result = await api.uploadPDF(
+      // Start async upload
+      const uploadResponse = await api.uploadPDFAsync(
         selectedFile,
         selectedPhase,
-        topic,
-        (progress) => setUploadProgress(progress)
+        topic
       );
 
-      if (result.success) {
-        toast.success(`Successfully indexed ${result.filename}`, {
-          description: `${result.chunks_indexed} chunks created`,
+      setUploadProgress(10);
+      setUploadMessage('Processing started...');
+
+      // Poll for status updates
+      const finalStatus = await api.pollUploadStatus(
+        uploadResponse.task_id,
+        (status: TaskStatusResponse) => {
+          setUploadProgress(status.progress);
+          setUploadMessage(status.message);
+        },
+        500, // poll every 500ms
+        600  // max 5 minutes
+      );
+
+      if (finalStatus.status === 'completed' && finalStatus.result) {
+        toast.success(`Successfully indexed ${finalStatus.result.filename}`, {
+          description: `${finalStatus.result.chunks_indexed} chunks created`,
         });
         setUploadDialogOpen(false);
         resetUploadForm();
         loadDocuments(); // Refresh the list
-      } else {
+      } else if (finalStatus.status === 'failed') {
         toast.error('Upload failed', {
-          description: result.error || 'Unknown error',
+          description: finalStatus.error || 'Unknown error',
         });
       }
     } catch (error) {
@@ -214,6 +230,7 @@ export default function Files() {
     } finally {
       setUploading(false);
       setUploadProgress(0);
+      setUploadMessage('');
     }
   };
 
@@ -222,6 +239,7 @@ export default function Files() {
     setSelectedPhase('');
     setSelectedTopic('');
     setCustomTopic('');
+    setUploadMessage('');
   };
 
   const handleDeleteClick = (doc: DocumentInfo) => {
@@ -565,7 +583,7 @@ export default function Files() {
             {uploading && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Uploading...</span>
+                  <span className="text-muted-foreground">{uploadMessage || 'Processing...'}</span>
                   <span className="text-foreground">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />

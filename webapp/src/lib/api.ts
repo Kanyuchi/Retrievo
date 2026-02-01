@@ -126,6 +126,36 @@ export interface UploadConfigResponse {
   existing_topics: string[];
 }
 
+// Async upload interfaces
+export interface AsyncUploadResponse {
+  task_id: string;
+  status: string;
+  message: string;
+  filename: string;
+  phase: string;
+  topic: string;
+}
+
+export interface TaskStatusResponse {
+  task_id: string;
+  filename: string;
+  phase: string;
+  topic: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  result: {
+    doc_id: string;
+    filename: string;
+    chunks_indexed: number;
+    metadata: Record<string, unknown>;
+  } | null;
+  error: string | null;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -286,6 +316,62 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Async upload PDF (returns task_id for polling)
+  async uploadPDFAsync(
+    file: File,
+    phase: string,
+    topic: string
+  ): Promise<AsyncUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('phase', phase);
+    formData.append('topic', topic);
+
+    const response = await fetch(`${this.baseUrl}/api/upload/async`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // Get upload task status
+  async getUploadStatus(taskId: string): Promise<TaskStatusResponse> {
+    return this.fetch(`/api/upload/${encodeURIComponent(taskId)}/status`);
+  }
+
+  // Poll for upload completion
+  async pollUploadStatus(
+    taskId: string,
+    onProgress?: (status: TaskStatusResponse) => void,
+    intervalMs: number = 500,
+    maxAttempts: number = 600 // 5 minutes max
+  ): Promise<TaskStatusResponse> {
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const status = await this.getUploadStatus(taskId);
+
+      if (onProgress) {
+        onProgress(status);
+      }
+
+      if (status.status === 'completed' || status.status === 'failed') {
+        return status;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      attempts++;
+    }
+
+    throw new Error('Upload polling timed out');
   }
 }
 
