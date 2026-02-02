@@ -156,6 +156,79 @@ export interface TaskStatusResponse {
   error: string | null;
 }
 
+// Auth interfaces
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface UserResponse {
+  id: number;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+  oauth_provider: string;
+  is_active: boolean;
+  is_verified: boolean;
+  created_at: string;
+}
+
+export interface OAuthConfig {
+  google_enabled: boolean;
+  github_enabled: boolean;
+}
+
+// Job interfaces
+export interface Job {
+  id: number;
+  name: string;
+  description: string | null;
+  collection_name: string;
+  status: string;
+  document_count: number;
+  chunk_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobListResponse {
+  total: number;
+  jobs: Job[];
+}
+
+export interface JobDocument {
+  id: number;
+  doc_id: string;
+  filename: string;
+  title: string | null;
+  authors: string | null;
+  year: number | null;
+  phase: string | null;
+  topic_category: string | null;
+  status: string;
+  chunk_count: number;
+  created_at: string;
+}
+
+export interface JobDocumentsResponse {
+  total: number;
+  documents: JobDocument[];
+}
+
+export interface JobStats {
+  job_id: number;
+  document_count: number;
+  chunk_count: number;
+  phases: Record<string, number>;
+  topics: Record<string, number>;
+  year_range: {
+    min: number | null;
+    max: number | null;
+  };
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -372,6 +445,251 @@ class ApiClient {
     }
 
     throw new Error('Upload polling timed out');
+  }
+
+  // ============================================
+  // Authentication Methods
+  // ============================================
+
+  // Register new user
+  async register(email: string, password: string, name?: string): Promise<TokenResponse> {
+    return this.fetch('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+  }
+
+  // Login with email/password
+  async login(email: string, password: string): Promise<TokenResponse> {
+    return this.fetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  // Refresh access token
+  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    return this.fetch('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  }
+
+  // Logout (invalidate refresh token)
+  async logout(refreshToken: string): Promise<{ message: string }> {
+    return this.fetch('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  }
+
+  // Get current user (requires auth)
+  async getCurrentUser(accessToken: string): Promise<UserResponse> {
+    return this.fetch('/api/auth/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
+  // Get OAuth configuration
+  async getOAuthConfig(): Promise<OAuthConfig> {
+    return this.fetch('/api/auth/oauth/config');
+  }
+
+  // Get OAuth authorization URL
+  async getOAuthUrl(provider: 'google' | 'github'): Promise<{ auth_url: string }> {
+    return this.fetch(`/api/auth/oauth/${provider}`);
+  }
+
+  // Handle OAuth callback
+  async handleOAuthCallback(
+    provider: 'google' | 'github',
+    code: string,
+    state?: string
+  ): Promise<TokenResponse> {
+    return this.fetch(`/api/auth/oauth/${provider}/callback`, {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    });
+  }
+
+  // ============================================
+  // Job Methods
+  // ============================================
+
+  // Create a new job
+  async createJob(
+    name: string,
+    description?: string,
+    accessToken?: string
+  ): Promise<Job> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/jobs', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name, description }),
+    });
+  }
+
+  // List user's jobs
+  async listJobs(accessToken?: string): Promise<JobListResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/jobs', { headers });
+  }
+
+  // Get a specific job
+  async getJob(jobId: number, accessToken?: string): Promise<Job> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}`, { headers });
+  }
+
+  // Update a job
+  async updateJob(
+    jobId: number,
+    updates: { name?: string; description?: string },
+    accessToken?: string
+  ): Promise<Job> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // Delete a job
+  async deleteJob(jobId: number, accessToken?: string): Promise<{ message: string }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  // Get job statistics
+  async getJobStats(jobId: number, accessToken?: string): Promise<JobStats> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/stats`, { headers });
+  }
+
+  // Get job documents
+  async getJobDocuments(
+    jobId: number,
+    params?: { phase_filter?: string; topic_filter?: string; limit?: number },
+    accessToken?: string
+  ): Promise<JobDocumentsResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const searchParams = new URLSearchParams();
+    if (params?.phase_filter) searchParams.set('phase_filter', params.phase_filter);
+    if (params?.topic_filter) searchParams.set('topic_filter', params.topic_filter);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    return this.fetch(`/api/jobs/${jobId}/documents?${searchParams.toString()}`, { headers });
+  }
+
+  // Upload PDF to a job
+  async uploadToJob(
+    jobId: number,
+    file: File,
+    phase: string,
+    topic: string,
+    accessToken?: string
+  ): Promise<AsyncUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('phase', phase);
+    formData.append('topic', topic);
+
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // Delete document from a job
+  async deleteJobDocument(
+    jobId: number,
+    docId: string,
+    accessToken?: string
+  ): Promise<{ message: string; chunks_deleted: number }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const response = await fetch(
+      `${this.baseUrl}/api/jobs/${jobId}/documents/${encodeURIComponent(docId)}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  // Query a job's knowledge base
+  async queryJob(
+    jobId: number,
+    question: string,
+    options?: {
+      n_sources?: number;
+      phase_filter?: string;
+      topic_filter?: string;
+    },
+    accessToken?: string
+  ): Promise<ChatResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const searchParams = new URLSearchParams();
+    searchParams.set('question', question);
+    if (options?.n_sources) searchParams.set('n_sources', options.n_sources.toString());
+    if (options?.phase_filter) searchParams.set('phase_filter', options.phase_filter);
+    if (options?.topic_filter) searchParams.set('topic_filter', options.topic_filter);
+    return this.fetch(`/api/jobs/${jobId}/query?${searchParams.toString()}`, { headers });
   }
 }
 

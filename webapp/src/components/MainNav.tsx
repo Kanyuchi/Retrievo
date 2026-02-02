@@ -1,27 +1,32 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Home, 
-  Database, 
-  MessageSquare, 
-  Search, 
-  Bot, 
+import {
+  Home,
+  Database,
+  MessageSquare,
+  Search,
+  Bot,
   FolderOpen,
+  Briefcase,
   HelpCircle,
   Moon,
   User,
   ChevronDown,
-  Menu
+  Menu,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
@@ -29,13 +34,20 @@ const navItems = [
   { path: '/chats', label: 'Chat', icon: MessageSquare },
   { path: '/searches', label: 'Search', icon: Search },
   { path: '/agents', label: 'Agent', icon: Bot },
-  { path: '/files', label: 'File Management', icon: FolderOpen },
+  { path: '/files', label: 'Files', icon: FolderOpen },
+  { path: '/jobs', label: 'Jobs', icon: Briefcase },
 ];
 
 export default function MainNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
 
   return (
     <motion.header
@@ -131,36 +143,74 @@ export default function MainNav() {
             <Moon className="w-5 h-5" />
           </Button>
 
-          {/* User Avatar */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                <div className="h-9 w-9 rounded-full bg-secondary flex items-center justify-center border border-border">
-                  <User className="h-5 w-5 text-muted-foreground" />
+          {/* User Avatar / Login */}
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.name || user.email}
+                      className="h-9 w-9 rounded-full object-cover border border-border"
+                    />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-border">
+                      <span className="text-sm font-medium text-primary">
+                        {(user?.name || user?.email || 'U')[0].toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium text-foreground">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user?.email}
+                  </p>
                 </div>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
-              <DropdownMenuItem onClick={() => navigate('/settings/data-sources')}>
-                Data sources
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings/model-providers')}>
-                Model providers
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings/mcp')}>
-                MCP
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings/team')}>
-                Team
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings/profile')}>
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/jobs')}>
+                  <Briefcase className="mr-2 h-4 w-4" />
+                  Knowledge Bases
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/settings/data-sources')}>
+                  Data sources
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings/model-providers')}>
+                  Model providers
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings/mcp')}>
+                  MCP
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings/team')}>
+                  Team
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings/profile')}>
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => navigate('/login')}
+              className="gap-2"
+            >
+              <LogIn className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign in</span>
+            </Button>
+          )}
 
           {/* Mobile Menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

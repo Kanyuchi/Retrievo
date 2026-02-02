@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
+import { AuthProvider } from './contexts/AuthContext';
 import MainNav from './components/MainNav';
 import Home from './pages/Home';
 import Dataset from './pages/Dataset';
@@ -8,29 +9,48 @@ import Chat from './pages/Chat';
 import Search from './pages/Search';
 import Agent from './pages/Agent';
 import Files from './pages/Files';
+import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
 import DataSources from './pages/settings/DataSources';
 import ModelProviders from './pages/settings/ModelProviders';
 import MCP from './pages/settings/MCP';
 import Team from './pages/settings/Team';
 import Profile from './pages/settings/Profile';
 
+// Layout component that conditionally shows MainNav
+function AppLayout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const hideNavRoutes = ['/login', '/auth/callback'];
+  const showNav = !hideNavRoutes.some(route => location.pathname.startsWith(route));
+
+  return (
+    <div className="min-h-screen bg-background">
+      {showNav && <MainNav />}
+      <Toaster
+        position="top-right"
+        theme="dark"
+        toastOptions={{
+          style: {
+            background: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            color: 'hsl(var(--foreground))',
+          },
+        }}
+      />
+      <main className={showNav ? "pt-[72px]" : ""}>
+        {children}
+      </main>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-background">
-        <MainNav />
-        <Toaster
-          position="top-right"
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
-              color: 'hsl(var(--foreground))',
-            },
-          }}
-        />
-        <main className="pt-[72px]">
+      <AuthProvider>
+        <AppLayout>
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<Home />} />
@@ -39,6 +59,10 @@ function App() {
               <Route path="/searches" element={<Search />} />
               <Route path="/agents" element={<Agent />} />
               <Route path="/files" element={<Files />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/jobs/:jobId" element={<JobDetail />} />
               <Route path="/settings/data-sources" element={<DataSources />} />
               <Route path="/settings/model-providers" element={<ModelProviders />} />
               <Route path="/settings/mcp" element={<MCP />} />
@@ -46,8 +70,8 @@ function App() {
               <Route path="/settings/profile" element={<Profile />} />
             </Routes>
           </AnimatePresence>
-        </main>
-      </div>
+        </AppLayout>
+      </AuthProvider>
     </Router>
   );
 }
