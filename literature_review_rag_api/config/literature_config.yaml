@@ -258,6 +258,23 @@ storage:
     allow_reset: true
 
 # ----------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS
+# ----------------------------------------------------------------------------
+auth:
+  # JWT settings (override via environment variables for production)
+  # JWT_SECRET_KEY - Set this in .env for production!
+  access_token_expire_minutes: 30
+  refresh_token_expire_days: 7
+
+  # OAuth providers (set client IDs/secrets via environment variables)
+  # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+  # GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+  oauth_redirect_url: "http://localhost:5173/auth/callback"
+
+  # Require authentication for API access
+  require_auth: false  # Set to true for production
+
+# ----------------------------------------------------------------------------
 # UPLOAD SETTINGS
 # ----------------------------------------------------------------------------
 upload:

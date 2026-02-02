@@ -354,3 +354,104 @@ class DeleteResponse(BaseModel):
     doc_id: str
     chunks_deleted: int = Field(default=0, description="Number of chunks removed")
     error: Optional[str] = Field(default=None, description="Error message if failed")
+
+
+# ============================================================================
+# AUTH MODELS
+# ============================================================================
+
+class RegisterRequest(BaseModel):
+    """Request model for user registration."""
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="Password (min 8 characters)")
+    name: Optional[str] = Field(default=None, description="User's display name")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "password": "securepassword123",
+                "name": "John Doe"
+            }
+        }
+
+
+class LoginRequest(BaseModel):
+    """Request model for login."""
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="User password")
+
+
+class TokenResponse(BaseModel):
+    """Response model for authentication tokens."""
+    access_token: str = Field(..., description="JWT access token")
+    refresh_token: str = Field(..., description="JWT refresh token")
+    token_type: str = Field(default="bearer", description="Token type")
+    expires_in: int = Field(..., description="Access token expiration in seconds")
+
+
+class RefreshRequest(BaseModel):
+    """Request model for token refresh."""
+    refresh_token: str = Field(..., description="Refresh token")
+
+
+class UserResponse(BaseModel):
+    """Response model for user information."""
+    id: int
+    email: str
+    name: Optional[str]
+    avatar_url: Optional[str]
+    oauth_provider: str
+    is_active: bool
+    is_verified: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class OAuthCallbackRequest(BaseModel):
+    """Request model for OAuth callback."""
+    code: str = Field(..., description="Authorization code from OAuth provider")
+    state: Optional[str] = Field(default=None, description="State parameter for CSRF protection")
+    redirect_uri: Optional[str] = Field(default=None, description="Redirect URI used in authorization")
+
+
+# ============================================================================
+# JOB MODELS
+# ============================================================================
+
+class JobCreateRequest(BaseModel):
+    """Request model for creating a job."""
+    name: str = Field(..., min_length=1, max_length=255, description="Job name")
+    description: Optional[str] = Field(default=None, description="Job description")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "My Research Project",
+                "description": "Knowledge base for my thesis research"
+            }
+        }
+
+
+class JobResponse(BaseModel):
+    """Response model for a job."""
+    id: int
+    name: str
+    description: Optional[str]
+    collection_name: str
+    status: str
+    document_count: int
+    chunk_count: int
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class JobListResponse(BaseModel):
+    """Response model for listing jobs."""
+    total: int
+    jobs: List[JobResponse]

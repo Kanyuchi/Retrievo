@@ -202,6 +202,13 @@ app.add_middleware(
     allow_headers=config_temp.api.cors_headers
 )
 
+# Include routers
+from .routers.auth import router as auth_router
+from .routers.jobs import router as jobs_router
+
+app.include_router(auth_router)
+app.include_router(jobs_router)
+
 
 # ============================================================================
 # HELPER FUNCTIONS
