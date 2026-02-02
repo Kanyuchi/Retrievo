@@ -693,12 +693,15 @@ async def delete_job_document(
         else:
             chunks_deleted = 0
 
+        # Delete document record first
+        db.delete(document)
+
         # Update job stats
         job.document_count = max(0, job.document_count - 1)
         job.chunk_count = max(0, job.chunk_count - chunks_deleted)
 
-        # Delete document record
-        DocumentCRUD.delete(db, document)
+        # Commit all changes
+        db.commit()
 
         logger.info(f"Deleted document {doc_id} from job {job_id}")
 
