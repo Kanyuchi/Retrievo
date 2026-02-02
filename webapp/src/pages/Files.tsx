@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   FolderOpen, Search, Upload, ChevronLeft, ChevronRight,
-  FileText, Trash2, X, AlertCircle, Loader2
+  FileText, Trash2, X, AlertCircle, Loader2, Database, Folder
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,9 @@ import {
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api';
-import type { DocumentInfo, UploadConfigResponse, TaskStatusResponse } from '@/lib/api';
+import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
+import { useAuth } from '@/contexts/AuthContext';
+import type { DocumentInfo, UploadConfigResponse, TaskStatusResponse, JobDocument } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -64,9 +66,25 @@ const itemVariants = {
   },
 };
 
+// Unified document type for display
+interface DisplayDocument {
+  doc_id: string;
+  title?: string;
+  authors?: string;
+  year?: number;
+  phase?: string;
+  topic_category?: string;
+  filename?: string;
+  total_pages?: number;
+  chunk_count?: number;
+}
+
 export default function Files() {
+  const { selectedKB, isDefaultSelected, refreshKBs } = useKnowledgeBase();
+  const { accessToken } = useAuth();
+
   // State
-  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [documents, setDocuments] = useState<DisplayDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadConfig, setUploadConfig] = useState<UploadConfigResponse | null>(null);
@@ -91,20 +109,53 @@ export default function Files() {
 
   // Delete confirmation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [documentToDelete, setDocumentToDelete] = useState<DocumentInfo | null>(null);
+  const [documentToDelete, setDocumentToDelete] = useState<DisplayDocument | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch documents and upload config
+  // Job stats for phases/topics
+  const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
+
+  // Load documents and config when KB changes
   useEffect(() => {
     loadDocuments();
     loadUploadConfig();
-  }, []);
+    loadJobStats();
+  }, [selectedKB?.id, isDefaultSelected, accessToken]);
 
   const loadDocuments = async () => {
+    if (!selectedKB) return;
+
     try {
       setLoading(true);
-      const response = await api.listDocuments({ limit: 500 });
-      setDocuments(response.documents);
+      if (isDefaultSelected) {
+        const response = await api.listDocuments({ limit: 500 });
+        setDocuments(response.documents.map(doc => ({
+          doc_id: doc.doc_id,
+          title: doc.title,
+          authors: doc.authors,
+          year: doc.year,
+          phase: doc.phase,
+          topic_category: doc.topic_category,
+          filename: doc.filename,
+          total_pages: doc.total_pages,
+        })));
+      } else {
+        const response = await api.getJobDocuments(
+          selectedKB.id as number,
+          { limit: 500 },
+          accessToken || undefined
+        );
+        setDocuments(response.documents.map((doc: JobDocument) => ({
+          doc_id: doc.doc_id,
+          title: doc.title || undefined,
+          authors: doc.authors || undefined,
+          year: doc.year || undefined,
+          phase: doc.phase || undefined,
+          topic_category: doc.topic_category || undefined,
+          filename: doc.filename,
+          chunk_count: doc.chunk_count,
+        })));
+      }
     } catch (error) {
       console.error('Failed to load documents:', error);
       toast.error('Failed to load documents');
@@ -119,6 +170,19 @@ export default function Files() {
       setUploadConfig(config);
     } catch (error) {
       console.error('Failed to load upload config:', error);
+    }
+  };
+
+  const loadJobStats = async () => {
+    if (!isDefaultSelected && selectedKB && accessToken) {
+      try {
+        const stats = await api.getJobStats(selectedKB.id as number, accessToken);
+        setJobStats({ phases: stats.phases, topics: stats.topics });
+      } catch (err) {
+        console.error('Failed to load job stats:', err);
+      }
+    } else {
+      setJobStats(null);
     }
   };
 
@@ -173,7 +237,7 @@ export default function Files() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !selectedPhase) {
+    if (!selectedFile || !selectedPhase || !selectedKB) {
       toast.error('Please select a file and phase');
       return;
     }
@@ -189,38 +253,61 @@ export default function Files() {
       setUploadProgress(0);
       setUploadMessage('Uploading file...');
 
-      // Start async upload
-      const uploadResponse = await api.uploadPDFAsync(
-        selectedFile,
-        selectedPhase,
-        topic
-      );
+      if (isDefaultSelected) {
+        // Upload to default collection (async with polling)
+        const uploadResponse = await api.uploadPDFAsync(
+          selectedFile,
+          selectedPhase,
+          topic
+        );
 
-      setUploadProgress(10);
-      setUploadMessage('Processing started...');
+        setUploadProgress(10);
+        setUploadMessage('Processing started...');
 
-      // Poll for status updates
-      const finalStatus = await api.pollUploadStatus(
-        uploadResponse.task_id,
-        (status: TaskStatusResponse) => {
-          setUploadProgress(status.progress);
-          setUploadMessage(status.message);
-        },
-        500, // poll every 500ms
-        600  // max 5 minutes
-      );
+        // Poll for status updates
+        const finalStatus = await api.pollUploadStatus(
+          uploadResponse.task_id,
+          (status: TaskStatusResponse) => {
+            setUploadProgress(status.progress);
+            setUploadMessage(status.message);
+          },
+          500,
+          600
+        );
 
-      if (finalStatus.status === 'completed' && finalStatus.result) {
-        toast.success(`Successfully indexed ${finalStatus.result.filename}`, {
-          description: `${finalStatus.result.chunks_indexed} chunks created`,
+        if (finalStatus.status === 'completed' && finalStatus.result) {
+          toast.success(`Successfully indexed ${finalStatus.result.filename}`, {
+            description: `${finalStatus.result.chunks_indexed} chunks created`,
+          });
+          setUploadDialogOpen(false);
+          resetUploadForm();
+          loadDocuments();
+        } else if (finalStatus.status === 'failed') {
+          toast.error('Upload failed', {
+            description: finalStatus.error || 'Unknown error',
+          });
+        }
+      } else {
+        // Upload to job collection (synchronous)
+        setUploadProgress(20);
+        setUploadMessage('Processing PDF...');
+
+        const response = await api.uploadToJob(
+          selectedKB.id as number,
+          selectedFile,
+          selectedPhase,
+          topic,
+          accessToken || undefined
+        );
+
+        setUploadProgress(100);
+        toast.success(`Successfully uploaded ${selectedFile.name}`, {
+          description: response.message || 'Document indexed successfully',
         });
         setUploadDialogOpen(false);
         resetUploadForm();
-        loadDocuments(); // Refresh the list
-      } else if (finalStatus.status === 'failed') {
-        toast.error('Upload failed', {
-          description: finalStatus.error || 'Unknown error',
-        });
+        loadDocuments();
+        refreshKBs(); // Refresh KB list to update counts
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -242,30 +329,44 @@ export default function Files() {
     setUploadMessage('');
   };
 
-  const handleDeleteClick = (doc: DocumentInfo) => {
+  const handleDeleteClick = (doc: DisplayDocument) => {
     setDocumentToDelete(doc);
     setDeleteDialogOpen(true);
   };
 
   const handleDelete = async () => {
-    if (!documentToDelete) return;
+    if (!documentToDelete || !selectedKB) return;
 
     try {
       setDeleting(true);
-      const result = await api.deleteDocument(documentToDelete.doc_id);
 
-      if (result.success) {
+      if (isDefaultSelected) {
+        const result = await api.deleteDocument(documentToDelete.doc_id);
+        if (result.success) {
+          toast.success('Document deleted', {
+            description: `Removed ${result.chunks_deleted} chunks`,
+          });
+        } else {
+          toast.error('Delete failed', {
+            description: result.error || 'Unknown error',
+          });
+          return;
+        }
+      } else {
+        const result = await api.deleteJobDocument(
+          selectedKB.id as number,
+          documentToDelete.doc_id,
+          accessToken || undefined
+        );
         toast.success('Document deleted', {
           description: `Removed ${result.chunks_deleted} chunks`,
         });
-        setDeleteDialogOpen(false);
-        setDocumentToDelete(null);
-        loadDocuments(); // Refresh the list
-      } else {
-        toast.error('Delete failed', {
-          description: result.error || 'Unknown error',
-        });
       }
+
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+      loadDocuments();
+      refreshKBs(); // Refresh KB list to update counts
     } catch (error) {
       console.error('Delete error:', error);
       toast.error('Delete failed', {
@@ -295,10 +396,20 @@ export default function Files() {
     currentPage * itemsPerPage
   );
 
-  const formatFileSize = (pages?: number) => {
-    if (!pages) return '-';
-    return `${pages} pages`;
+  const formatFileSize = (pages?: number, chunks?: number) => {
+    if (chunks) return `${chunks} chunks`;
+    if (pages) return `${pages} pages`;
+    return '-';
   };
+
+  // Get phases and topics for upload form
+  const availablePhases = uploadConfig?.phases || [];
+  const availableTopics = isDefaultSelected
+    ? uploadConfig?.existing_topics || []
+    : Object.keys(jobStats?.topics || {});
+
+  // Can upload if: default collection has upload enabled, or it's a user job
+  const canUpload = isDefaultSelected ? uploadConfig?.enabled : !!accessToken;
 
   return (
     <motion.div
@@ -317,7 +428,7 @@ export default function Files() {
           <div className="bg-card border-2 border-dashed border-primary rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 text-primary mx-auto mb-4" />
             <p className="text-xl font-semibold text-foreground">Drop PDF here</p>
-            <p className="text-muted-foreground mt-2">to upload and index</p>
+            <p className="text-muted-foreground mt-2">to upload to {selectedKB?.name}</p>
           </div>
         </div>
       )}
@@ -332,10 +443,18 @@ export default function Files() {
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <FolderOpen className="w-5 h-5 text-primary" />
             </div>
-            <h1 className="text-2xl font-semibold text-white">Files</h1>
-            <span className="text-sm text-muted-foreground">
-              ({documents.length} documents)
-            </span>
+            <div>
+              <h1 className="text-2xl font-semibold text-white">Files</h1>
+              {/* Show which KB is being viewed */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {isDefaultSelected ? (
+                  <Database className="w-3 h-3" />
+                ) : (
+                  <Folder className="w-3 h-3" />
+                )}
+                <span>{selectedKB?.name} · {documents.length} documents</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -360,7 +479,7 @@ export default function Files() {
             <Button
               className="bg-white text-background hover:bg-white/90 gap-2"
               onClick={() => fileInputRef.current?.click()}
-              disabled={!uploadConfig?.enabled}
+              disabled={!canUpload}
             >
               <Upload className="w-4 h-4" />
               Add file
@@ -400,7 +519,7 @@ export default function Files() {
                       <p className="text-muted-foreground">
                         {searchQuery ? 'No documents match your search' : 'No documents yet'}
                       </p>
-                      {!searchQuery && (
+                      {!searchQuery && canUpload && (
                         <Button
                           variant="outline"
                           className="mt-4"
@@ -439,7 +558,7 @@ export default function Files() {
                       <TableCell className="text-muted-foreground">{doc.phase || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">{doc.topic_category || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">{doc.year || '-'}</TableCell>
-                      <TableCell className="text-muted-foreground">{formatFileSize(doc.total_pages)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatFileSize(doc.total_pages, doc.chunk_count)}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -510,7 +629,7 @@ export default function Files() {
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Upload PDF</DialogTitle>
+            <DialogTitle>Upload PDF to {selectedKB?.name}</DialogTitle>
             <DialogDescription>
               Select phase and topic for the document to be indexed properly.
             </DialogDescription>
@@ -546,7 +665,7 @@ export default function Files() {
                   <SelectValue placeholder="Select a phase" />
                 </SelectTrigger>
                 <SelectContent>
-                  {uploadConfig?.phases.map(phase => (
+                  {availablePhases.map(phase => (
                     <SelectItem key={phase.name} value={phase.name}>
                       {phase.name} - {phase.full_name}
                     </SelectItem>
@@ -563,7 +682,7 @@ export default function Files() {
                   <SelectValue placeholder="Select existing topic or enter new" />
                 </SelectTrigger>
                 <SelectContent>
-                  {uploadConfig?.existing_topics.map(topic => (
+                  {availableTopics.map(topic => (
                     <SelectItem key={topic} value={topic}>
                       {topic}
                     </SelectItem>

@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Search as SearchIcon, Loader2, FileText, ChevronDown, Filter } from 'lucide-react';
+import { Search as SearchIcon, Loader2, FileText, ChevronDown, Filter, Database, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useSearch, useStats } from '@/hooks/useApi';
+import { useStats } from '@/hooks/useApi';
+import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
+import type { SearchResult, JobQueryResult } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,25 +39,122 @@ const itemVariants = {
   },
 };
 
+// Unified result type for display
+interface DisplayResult {
+  doc_id: string;
+  title: string;
+  authors?: string;
+  year?: number;
+  phase?: string;
+  topic?: string;
+  chunk_text: string;
+  relevance_score: number;
+}
+
 export default function Search() {
   const [query, setQuery] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('');
   const [topicFilter, setTopicFilter] = useState<string>('');
-  const { results, loading, error, search } = useSearch();
-  const { data: stats } = useStats();
+  const [results, setResults] = useState<DisplayResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
+  const { selectedKB, isDefaultSelected } = useKnowledgeBase();
+  const { accessToken } = useAuth();
+  const { data: defaultStats } = useStats();
+
+  // Job stats for non-default KB
+  const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
+
+  // Load job stats when KB changes
+  useEffect(() => {
+    if (!isDefaultSelected && selectedKB && accessToken) {
+      api.getJobStats(selectedKB.id as number, accessToken)
+        .then(stats => setJobStats({ phases: stats.phases, topics: stats.topics }))
+        .catch(err => console.error('Failed to load job stats:', err));
+    } else {
+      setJobStats(null);
+    }
+  }, [selectedKB, isDefaultSelected, accessToken]);
+
+  // Use appropriate stats based on selected KB
+  const stats = isDefaultSelected ? defaultStats : jobStats;
   const phases = stats ? Object.keys(stats.phases) : [];
   const topics = stats ? Object.keys(stats.topics) : [];
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    await search({
-      query: query.trim(),
-      n_results: 10,
-      phase_filter: phaseFilter || undefined,
-      topic_filter: topicFilter || undefined,
-    });
-  };
+  // Reset filters and results when KB changes
+  useEffect(() => {
+    setPhaseFilter('');
+    setTopicFilter('');
+    setResults([]);
+    setHasSearched(false);
+    setError(null);
+  }, [selectedKB?.id]);
+
+  const handleSearch = useCallback(async () => {
+    if (!query.trim() || !selectedKB) return;
+
+    setLoading(true);
+    setError(null);
+    setHasSearched(true);
+
+    try {
+      if (isDefaultSelected) {
+        // Search default collection
+        const searchResults: SearchResult[] = await api.search({
+          query: query.trim(),
+          n_results: 10,
+          phase_filter: phaseFilter || undefined,
+          topic_filter: topicFilter || undefined,
+        });
+
+        setResults(searchResults.map(r => ({
+          doc_id: r.doc_id,
+          title: r.title,
+          authors: r.authors,
+          year: r.year,
+          phase: r.phase,
+          topic: r.topic,
+          chunk_text: r.chunk_text,
+          relevance_score: r.relevance_score,
+        })));
+      } else {
+        // Search job collection using query endpoint
+        const response = await api.queryJob(
+          selectedKB.id as number,
+          query.trim(),
+          {
+            n_sources: 10,
+            phase_filter: phaseFilter || undefined,
+            topic_filter: topicFilter || undefined,
+          },
+          accessToken || undefined
+        );
+
+        if (response.results && response.results.length > 0) {
+          setResults(response.results.map((r: JobQueryResult) => ({
+            doc_id: r.metadata.doc_id,
+            title: r.metadata.title || 'Untitled',
+            authors: r.metadata.authors,
+            year: r.metadata.year,
+            phase: r.metadata.phase,
+            topic: r.metadata.topic_category,
+            chunk_text: r.content,
+            relevance_score: r.score,
+          })));
+        } else {
+          setResults([]);
+        }
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+      setError(err instanceof Error ? err.message : 'Search failed');
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [query, selectedKB, isDefaultSelected, accessToken, phaseFilter, topicFilter]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -70,7 +171,7 @@ export default function Search() {
     >
       <div className="max-w-[1400px] mx-auto">
         {/* Header */}
-        <motion.div 
+        <motion.div
           variants={itemVariants}
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
         >
@@ -78,7 +179,18 @@ export default function Search() {
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <SearchIcon className="w-5 h-5 text-primary" />
             </div>
-            <h1 className="text-2xl font-semibold text-white">Search Apps</h1>
+            <div>
+              <h1 className="text-2xl font-semibold text-white">Search</h1>
+              {/* Show which KB is being searched */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {isDefaultSelected ? (
+                  <Database className="w-3 h-3" />
+                ) : (
+                  <Folder className="w-3 h-3" />
+                )}
+                <span>Searching: {selectedKB?.name}</span>
+              </div>
+            </div>
           </div>
         </motion.div>
 
@@ -88,54 +200,58 @@ export default function Search() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input 
-                  placeholder="Enter your search query..." 
+                <Input
+                  placeholder={`Search ${isDefaultSelected ? 'the literature' : selectedKB?.name}...`}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   className="pl-12 h-12 bg-secondary/50 border-border focus:border-primary text-lg"
                 />
               </div>
-              
+
               {/* Phase Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2 h-12">
-                    <Filter className="w-4 h-4" />
-                    {phaseFilter || 'Phase'}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border">
-                  <DropdownMenuItem onClick={() => setPhaseFilter('')}>All Phases</DropdownMenuItem>
-                  {phases.map(phase => (
-                    <DropdownMenuItem key={phase} onClick={() => setPhaseFilter(phase)}>
-                      {phase}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {phases.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2 h-12">
+                      <Filter className="w-4 h-4" />
+                      {phaseFilter || 'Phase'}
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-card border-border">
+                    <DropdownMenuItem onClick={() => setPhaseFilter('')}>All Phases</DropdownMenuItem>
+                    {phases.map(phase => (
+                      <DropdownMenuItem key={phase} onClick={() => setPhaseFilter(phase)}>
+                        {phase}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               {/* Topic Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2 h-12">
-                    <Filter className="w-4 h-4" />
-                    {topicFilter || 'Topic'}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border">
-                  <DropdownMenuItem onClick={() => setTopicFilter('')}>All Topics</DropdownMenuItem>
-                  {topics.map(topic => (
-                    <DropdownMenuItem key={topic} onClick={() => setTopicFilter(topic)}>
-                      {topic}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <Button 
+              {topics.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2 h-12">
+                      <Filter className="w-4 h-4" />
+                      {topicFilter || 'Topic'}
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-card border-border">
+                    <DropdownMenuItem onClick={() => setTopicFilter('')}>All Topics</DropdownMenuItem>
+                    {topics.map(topic => (
+                      <DropdownMenuItem key={topic} onClick={() => setTopicFilter(topic)}>
+                        {topic}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Button
                 onClick={handleSearch}
                 disabled={loading || !query.trim()}
                 className="h-12 px-8 bg-white text-background hover:bg-white/90"
@@ -167,7 +283,7 @@ export default function Search() {
                 Results ({results.length})
               </h2>
             </div>
-            
+
             <div className="space-y-4">
               {results.map((result, index) => (
                 <Card key={index} className="p-6 bg-card border-border hover:border-primary/50 transition-colors">
@@ -180,7 +296,7 @@ export default function Search() {
                       Score: {(result.relevance_score * 100).toFixed(1)}%
                     </Badge>
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-2 mb-3">
                     {result.authors && (
                       <Badge variant="secondary" className="bg-secondary/50">
@@ -203,7 +319,7 @@ export default function Search() {
                       </Badge>
                     )}
                   </div>
-                  
+
                   <p className="text-muted-foreground text-sm line-clamp-3">
                     {result.chunk_text}
                   </p>
@@ -213,9 +329,9 @@ export default function Search() {
           </motion.div>
         )}
 
-        {/* Empty State */}
-        {!loading && results.length === 0 && !error && query && (
-          <motion.div 
+        {/* Empty State after search */}
+        {!loading && results.length === 0 && hasSearched && !error && (
+          <motion.div
             variants={itemVariants}
             className="flex flex-col items-center justify-center py-32"
           >
@@ -227,15 +343,22 @@ export default function Search() {
         )}
 
         {/* Initial State */}
-        {!loading && results.length === 0 && !query && (
-          <motion.div 
+        {!loading && results.length === 0 && !hasSearched && (
+          <motion.div
             variants={itemVariants}
             className="flex flex-col items-center justify-center py-32"
           >
             <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mb-4">
               <SearchIcon className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground text-sm">Enter a query to search the literature</p>
+            <p className="text-muted-foreground text-sm">
+              Enter a query to search {isDefaultSelected ? 'the literature' : `"${selectedKB?.name}"`}
+            </p>
+            {selectedKB && (
+              <p className="text-xs mt-2 text-muted-foreground/70">
+                {selectedKB.document_count} documents · {selectedKB.chunk_count.toLocaleString()} chunks
+              </p>
+            )}
           </motion.div>
         )}
       </div>
