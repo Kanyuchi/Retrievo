@@ -401,10 +401,16 @@ def _load_filter_config(yaml_filters: dict) -> FilterConfig:
 
 def _load_api_config(yaml_api: dict, env_settings: Settings) -> APIConfig:
     """Load API configuration with environment overrides."""
+    # Parse CORS origins from environment (comma-separated) or use YAML/default
+    if env_settings.cors_origins:
+        cors_origins = [origin.strip() for origin in env_settings.cors_origins.split(",")]
+    else:
+        cors_origins = yaml_api.get("cors_origins", ["*"])
+
     return APIConfig(
         host=env_settings.api_host,  # Environment override
         port=env_settings.api_port,  # Environment override
-        cors_origins=yaml_api.get("cors_origins", ["*"]),
+        cors_origins=cors_origins,
         cors_credentials=yaml_api.get("cors_credentials", True),
         cors_methods=yaml_api.get("cors_methods", ["*"]),
         cors_headers=yaml_api.get("cors_headers", ["*"]),
