@@ -252,14 +252,25 @@ class DocumentIndexer:
         return chunks
 
     def _chunk_hierarchical(self, text: str, metadata: dict) -> List[Dict[str, Any]]:
-        """Create hierarchical chunks (parent + child)."""
+        """Create hierarchical chunks (parent + child) with deduplication."""
         chunk_dicts = []
         doc_id = metadata.get("doc_id", "unknown")
+        seen_chunks = set()  # Track chunk fingerprints for deduplication
 
         parent_chunks = self.parent_splitter.split_text(text)
         global_child_index = 0
 
         for parent_idx, parent_text in enumerate(parent_chunks):
+            # Skip very short parent chunks
+            if len(parent_text.strip()) < 100:
+                continue
+
+            # Check for near-duplicate content
+            parent_fingerprint = self._get_chunk_fingerprint(parent_text)
+            if parent_fingerprint in seen_chunks:
+                continue
+            seen_chunks.add(parent_fingerprint)
+
             parent_id = f"{doc_id}_parent_{parent_idx}"
 
             # Create parent chunk
@@ -279,6 +290,16 @@ class DocumentIndexer:
             child_chunks = self.child_splitter.split_text(parent_text)
 
             for child_idx, child_text in enumerate(child_chunks):
+                # Skip very short child chunks
+                if len(child_text.strip()) < 50:
+                    continue
+
+                # Check for near-duplicate content
+                child_fingerprint = self._get_chunk_fingerprint(child_text)
+                if child_fingerprint in seen_chunks:
+                    continue
+                seen_chunks.add(child_fingerprint)
+
                 child_meta = metadata.copy()
                 child_meta["chunk_type"] = "hierarchical_child"
                 child_meta["chunk_index"] = global_child_index
@@ -295,6 +316,16 @@ class DocumentIndexer:
                 global_child_index += 1
 
         return chunk_dicts
+
+    def _get_chunk_fingerprint(self, text: str) -> str:
+        """
+        Create a fingerprint for deduplication.
+        Uses first 100 chars normalized to detect near-duplicates.
+        """
+        import re
+        # Normalize: lowercase, remove extra whitespace, take first 100 chars
+        normalized = re.sub(r'\s+', ' ', text.lower().strip())[:100]
+        return normalized
 
     def _chunk_sections(self, sections, metadata: dict) -> List[Dict[str, Any]]:
         """Chunk extracted sections with section-aware sizes."""

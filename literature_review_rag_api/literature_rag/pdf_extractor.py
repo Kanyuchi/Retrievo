@@ -17,6 +17,42 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+# Patterns to remove from extracted text (headers, footers, watermarks)
+NOISE_PATTERNS = [
+    # Download/access notices
+    r'Downloaded from https?://[^\s]+',
+    r'Wiley Online Library on \[[^\]]+\]',
+    r'See the Terms and Conditions \([^\)]+\)',
+    r'on Wiley Online Library for rules of use',
+    r'OA articles are governed by',
+    r'applicable Creative Commons License',
+    r'\d{8}, \d{4}, \d+, Downloaded from',
+    # Copyright and license notices
+    r'©\s*\d{4}[^.]*\.',
+    r'Copyright\s*©?\s*\d{4}[^.]*\.',
+    r'All rights reserved\.?',
+    r'Creative Commons Attribution',
+    r'CC BY[^\s]*',
+    # Journal/publisher headers
+    r'doi:\s*10\.\d+/[^\s]+',
+    r'https?://doi\.org/10\.\d+/[^\s]+',
+    r'Received:?\s*\d+\s+\w+\s+\d{4}',
+    r'Accepted:?\s*\d+\s+\w+\s+\d{4}',
+    r'Published:?\s*\d+\s+\w+\s+\d{4}',
+    r'First published:?\s*\d+\s+\w+\s+\d{4}',
+    # Page numbers and headers
+    r'^\d+\s*$',  # Standalone page numbers
+    r'^Page\s+\d+\s+of\s+\d+$',
+    r'^\s*\d+\s*\|\s*',  # Page number with separator
+    # JSTOR/database notices
+    r'Accessed\s+\d+\s+\w+\s+\d{4}',
+    r'https?://www\.jstor\.org/[^\s]+',
+    r'JSTOR is a not-for-profit',
+    # Email and author contact info in headers
+    r'Correspondence:?\s*[^\n]+@[^\n]+',
+    r'E-?mail:?\s*[^\s]+@[^\s]+',
+]
+
 # Section detection patterns for academic papers
 SECTION_PATTERNS = {
     "abstract": r"(?i)^(abstract|summary)[\s:]",
@@ -150,7 +186,7 @@ class AcademicPDFExtractor:
             return None, metadata
 
     def extract_full_text(self, pdf_path: Path) -> str:
-        """Extract full text from PDF (fallback method)."""
+        """Extract full text from PDF (fallback method) with noise removal."""
         try:
             doc = fitz.open(pdf_path)
             text_parts = []
@@ -160,14 +196,65 @@ class AcademicPDFExtractor:
                 page = doc[page_num]
                 text = page.get_text()
                 if text.strip():
-                    text_parts.append(text)
+                    # Clean the page text
+                    cleaned_text = self._clean_text(text)
+                    if cleaned_text.strip():
+                        text_parts.append(cleaned_text)
 
             doc.close()
-            return "\n\n".join(text_parts)
+
+            # Join and do final cleanup
+            full_text = "\n\n".join(text_parts)
+            return self._final_cleanup(full_text)
 
         except Exception as e:
             logger.error(f"Error extracting full text from {pdf_path}: {e}")
             return ""
+
+    def _clean_text(self, text: str) -> str:
+        """Remove noise patterns from extracted text."""
+        cleaned = text
+
+        # Apply noise pattern removal
+        for pattern in NOISE_PATTERNS:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
+
+        # Remove lines that are mostly non-alphanumeric (likely artifacts)
+        lines = cleaned.split('\n')
+        clean_lines = []
+        for line in lines:
+            # Skip very short lines that are likely page numbers or artifacts
+            if len(line.strip()) < 3:
+                continue
+            # Skip lines that are mostly numbers/symbols
+            alnum_ratio = sum(c.isalnum() or c.isspace() for c in line) / max(len(line), 1)
+            if alnum_ratio < 0.5:
+                continue
+            clean_lines.append(line)
+
+        return '\n'.join(clean_lines)
+
+    def _final_cleanup(self, text: str) -> str:
+        """Final cleanup pass on full document text."""
+        # Remove excessive whitespace while preserving paragraph breaks
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r' {2,}', ' ', text)
+
+        # Remove repeated short lines (often headers/footers repeated on each page)
+        lines = text.split('\n')
+        line_counts = {}
+        for line in lines:
+            line_stripped = line.strip()
+            if 5 < len(line_stripped) < 100:  # Short lines that might be headers
+                line_counts[line_stripped] = line_counts.get(line_stripped, 0) + 1
+
+        # Remove lines that appear more than 3 times (likely repeated headers/footers)
+        repeated_lines = {line for line, count in line_counts.items() if count > 3}
+        if repeated_lines:
+            clean_lines = [line for line in lines if line.strip() not in repeated_lines]
+            text = '\n'.join(clean_lines)
+
+        return text.strip()
 
     def _init_metadata(self, pdf_path: Path, phase_info: dict = None) -> PDFMetadata:
         """Initialize metadata structure."""
