@@ -38,9 +38,35 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
 
+    # Database
+    database_url: str = Field(default="sqlite:///./literature_rag.db", env="DATABASE_URL")
+
+    # CORS
+    cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000", env="CORS_ORIGINS")
+
+    # AWS S3 Configuration
+    aws_s3_bucket: Optional[str] = Field(default=None, env="AWS_S3_BUCKET")
+    aws_region: Optional[str] = Field(default=None, env="AWS_REGION")
+    aws_access_key_id: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
+
+    # JWT Authentication
+    jwt_secret_key: Optional[str] = Field(default=None, env="JWT_SECRET_KEY")
+    jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
+    access_token_expire_minutes: int = Field(default=30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_token_expire_days: int = Field(default=7, env="REFRESH_TOKEN_EXPIRE_DAYS")
+
+    # OAuth
+    google_client_id: Optional[str] = Field(default=None, env="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, env="GOOGLE_CLIENT_SECRET")
+    github_client_id: Optional[str] = Field(default=None, env="GITHUB_CLIENT_ID")
+    github_client_secret: Optional[str] = Field(default=None, env="GITHUB_CLIENT_SECRET")
+    oauth_redirect_base: str = Field(default="http://localhost:8001", env="OAUTH_REDIRECT_BASE")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Allow extra env vars without error
 
 
 @dataclass
