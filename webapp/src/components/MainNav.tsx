@@ -11,7 +11,6 @@ import {
   Briefcase,
   HelpCircle,
   Moon,
-  User,
   ChevronDown,
   Menu,
   LogIn,

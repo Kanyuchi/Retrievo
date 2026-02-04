@@ -42,7 +42,7 @@ import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
-import type { DocumentInfo, UploadConfigResponse, TaskStatusResponse, JobDocument } from '@/lib/api';
+import type { UploadConfigResponse, TaskStatusResponse, JobDocument } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
