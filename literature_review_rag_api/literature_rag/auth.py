@@ -25,7 +25,33 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # JWT Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+# Persist a stable secret key so tokens survive server restarts.
+# Priority: env var > file-based key > generate-and-save
+def _get_or_create_secret_key() -> str:
+    """Return a stable JWT secret key that persists across restarts."""
+    env_key = os.getenv("JWT_SECRET_KEY")
+    if env_key:
+        return env_key
+
+    key_file = os.path.join(os.path.dirname(__file__), "..", ".jwt_secret")
+    key_file = os.path.abspath(key_file)
+
+    if os.path.exists(key_file):
+        with open(key_file, "r") as f:
+            return f.read().strip()
+
+    # First run — generate and persist
+    new_key = secrets.token_urlsafe(32)
+    try:
+        with open(key_file, "w") as f:
+            f.write(new_key)
+        os.chmod(key_file, 0o600)  # Owner-only read/write
+        logger.info("Generated and saved new JWT secret key")
+    except OSError as e:
+        logger.warning(f"Could not persist JWT secret key to file: {e}")
+    return new_key
+
+SECRET_KEY = _get_or_create_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))

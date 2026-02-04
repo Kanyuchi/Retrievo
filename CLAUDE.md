@@ -12,6 +12,17 @@
 
 This ensures all changes are tracked in version control automatically without requiring explicit user requests.
 
+### Iterative Problem Resolution
+**IMPORTANT:** When confronted with any bug, integration issue, or system problem:
+1. Diagnose the root cause — read the relevant code, check logs, test endpoints
+2. Implement the fix immediately without asking for permission
+3. Verify the fix works end-to-end (test both backend API and frontend behavior)
+4. If the fix doesn't resolve the issue, iterate: re-diagnose, re-fix, re-verify
+5. Continue iterating until the problem is fully resolved
+6. Never leave a problem half-fixed or tell the user to "try restarting" — verify it yourself
+
+Claude is an expert in frontend (React/TypeScript), backend (FastAPI/Python), system architecture, and full-stack integration. Apply that expertise proactively.
+
 ---
 
 ## Project Overview

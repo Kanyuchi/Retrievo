@@ -21,6 +21,9 @@ indices/
 .env
 .env.local
 
+# JWT secret key (auto-generated, must never be committed)
+.jwt_secret
+
 # IDE
 .vscode/
 .idea/
