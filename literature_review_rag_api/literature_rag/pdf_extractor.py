@@ -14,6 +14,15 @@ from dataclasses import dataclass
 import fitz  # PyMuPDF
 from datetime import datetime
 
+# OCR imports (optional - gracefully degrade if not available)
+try:
+    from pdf2image import convert_from_path
+    from PIL import Image
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,6 +139,14 @@ class AcademicPDFExtractor:
         self.max_pages = self.config.get("max_pages_per_pdf", None)
         self.metadata_pages = self.config.get("extract_first_n_pages_for_metadata", 3)
 
+        # OCR settings
+        self.use_ocr_fallback = self.config.get("use_ocr_fallback", True)
+        self.ocr_dpi = self.config.get("ocr_dpi", 200)  # Lower DPI for faster processing
+        self.ocr_language = self.config.get("ocr_language", "eng")
+
+        if self.use_ocr_fallback and not OCR_AVAILABLE:
+            logger.warning("OCR fallback enabled but pytesseract/pdf2image not installed")
+
     def extract_pdf(self, pdf_path: Path, phase_info: dict = None) -> Tuple[Optional[List[ExtractedSection]], PDFMetadata]:
         """
         Extract PDF with section detection.
@@ -186,7 +203,11 @@ class AcademicPDFExtractor:
             return None, metadata
 
     def extract_full_text(self, pdf_path: Path) -> str:
-        """Extract full text from PDF (fallback method) with noise removal."""
+        """Extract full text from PDF (fallback method) with noise removal.
+
+        If regular text extraction yields no content and OCR is available,
+        automatically falls back to OCR extraction for scanned documents.
+        """
         try:
             doc = fitz.open(pdf_path)
             text_parts = []
@@ -205,10 +226,73 @@ class AcademicPDFExtractor:
 
             # Join and do final cleanup
             full_text = "\n\n".join(text_parts)
-            return self._final_cleanup(full_text)
+            full_text = self._final_cleanup(full_text)
+
+            # Check if we got meaningful text
+            # If text is too short or mostly whitespace, try OCR
+            meaningful_chars = sum(1 for c in full_text if c.isalnum())
+            if meaningful_chars < 500 and self.use_ocr_fallback and OCR_AVAILABLE:
+                logger.info(f"Regular extraction yielded only {meaningful_chars} chars, trying OCR for {pdf_path.name}")
+                ocr_text = self._extract_with_ocr(pdf_path)
+                if ocr_text and len(ocr_text) > len(full_text):
+                    logger.info(f"OCR extracted {len(ocr_text)} chars from {pdf_path.name}")
+                    return ocr_text
+
+            return full_text
 
         except Exception as e:
             logger.error(f"Error extracting full text from {pdf_path}: {e}")
+            # Try OCR as last resort
+            if self.use_ocr_fallback and OCR_AVAILABLE:
+                logger.info(f"Attempting OCR after extraction error for {pdf_path.name}")
+                return self._extract_with_ocr(pdf_path)
+            return ""
+
+    def _extract_with_ocr(self, pdf_path: Path) -> str:
+        """Extract text from PDF using OCR (for scanned documents)."""
+        if not OCR_AVAILABLE:
+            logger.warning("OCR requested but pytesseract/pdf2image not available")
+            return ""
+
+        try:
+            logger.info(f"Running OCR on {pdf_path.name} (this may take a moment...)")
+
+            # Convert PDF pages to images
+            max_pages = self.max_pages or 50  # Limit OCR pages for performance
+            images = convert_from_path(
+                pdf_path,
+                dpi=self.ocr_dpi,
+                first_page=1,
+                last_page=max_pages
+            )
+
+            text_parts = []
+            for i, image in enumerate(images):
+                # Run OCR on each page
+                page_text = pytesseract.image_to_string(
+                    image,
+                    lang=self.ocr_language,
+                    config='--psm 1'  # Automatic page segmentation with OSD
+                )
+
+                if page_text.strip():
+                    cleaned_text = self._clean_text(page_text)
+                    if cleaned_text.strip():
+                        text_parts.append(cleaned_text)
+
+                # Log progress for long documents
+                if (i + 1) % 10 == 0:
+                    logger.info(f"OCR progress: {i + 1}/{len(images)} pages")
+
+            # Join and cleanup
+            full_text = "\n\n".join(text_parts)
+            full_text = self._final_cleanup(full_text)
+
+            logger.info(f"OCR completed for {pdf_path.name}: {len(full_text)} characters extracted")
+            return full_text
+
+        except Exception as e:
+            logger.error(f"OCR extraction failed for {pdf_path}: {e}")
             return ""
 
     def _clean_text(self, text: str) -> str:
