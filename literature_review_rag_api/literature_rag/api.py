@@ -767,7 +767,6 @@ ACADEMIC LITERATURE CONTEXT:
 Please provide a well-structured answer using author-date citations (e.g., "According to Smith (2020) [1], ..."). Always include the author name and year when citing."""
 
         # Call Groq API
-        import time
         start_time = time.time()
 
         chat_completion = groq_client.chat.completions.create(
