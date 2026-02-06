@@ -1,15 +1,165 @@
+# Evaluation queries for retrieval precision/recall testing
+# Each query has expected_doc_ids that SHOULD be in the top results
+
 queries:
-  - id: "q1"
-    query: "business formation in Ruhr Valley"
+  # === Varieties of Capitalism ===
+  - id: "voc_1"
+    query: "varieties of capitalism institutional foundations"
     expected_doc_ids:
-      - "phase_2_ruhr_innovationsreport_2020_en"
+      - "phase_1_685c383b_varieties_of_capitalism_hall_soskice"
+      - "phase_1_an_introduction_to_varieties_of_capitalism"
+    n_results: 5
+
+  - id: "voc_2"
+    query: "varieties of liberalization social solidarity"
+    expected_doc_ids:
+      - "phase_1_2012_thelen_varieties_liberalization_pdf"
+    n_results: 5
+
+  - id: "voc_3"
+    query: "coordination rights competition law capitalism"
+    expected_doc_ids:
+      - "phase_1_foster_thelen_2024_coordination_rights_competition"
+    n_results: 5
+
+  # === Ruhr Region / German Studies ===
+  - id: "ruhr_1"
+    query: "Ruhr region coal mining green industry transition"
+    expected_doc_ids:
+      - "phase_1_germany__the_ruhr_region_s_pivot_from_coal_mining_"
+    n_results: 5
+
+  - id: "ruhr_2"
+    query: "just transition Ruhr area structural change"
+    expected_doc_ids:
+      - "phase_1_just_transition_for_regions_and_generations_experi"
+    n_results: 5
+
+  - id: "ruhr_3"
+    query: "Germany hard coal mining phase out policies"
+    expected_doc_ids:
+      - "phase_1_lessons_from_germany_s_hard_coal_mining_phase_out_"
+    n_results: 5
+
+  - id: "ruhr_4"
+    query: "historical structural change Ruhrgebiet"
+    expected_doc_ids:
+      - "phase_3_2025_03_03_cc_29_2021_fallstudie_analyse_historisc"
+    n_results: 5
+    phase_filter: "Phase 3"
+
+  - id: "ruhr_5"
+    query: "restructuring Europe rustbelt German Ruhr"
+    expected_doc_ids:
+      - "phase_3_38895079x"
+    n_results: 5
+
+  # === Business Formation ===
+  - id: "biz_1"
+    query: "new business formation regional development Germany"
+    expected_doc_ids:
+      - "phase_2_2008_fritsch_mueller_the_case_of_germany_sbe"
     n_results: 5
     phase_filter: "Phase 2"
     topic_filter: "Business Formation"
-  - id: "q2"
-    query: "spatial panel data methods"
+
+  - id: "biz_2"
+    query: "business cycles start-ups industries"
+    expected_doc_ids:
+      - "phase_2_business_cycles_and_start_ups_across_industries_an"
+    n_results: 5
+
+  - id: "biz_3"
+    query: "sustainable business model innovation drivers"
+    expected_doc_ids:
+      - "phase_2_drivers_of_sustainable_business_model_innovations_"
+    n_results: 5
+
+  # === COVID-19 Impact ===
+  - id: "covid_1"
+    query: "COVID-19 impact sectoral productivity"
+    expected_doc_ids:
+      - "phase_2_covid_19_s_impact_on_sectoral_productivity__short_"
+    n_results: 5
+
+  - id: "covid_2"
+    query: "COVID-19 manufacturing landscape"
+    expected_doc_ids:
+      - "phase_2_how_is_covid_19_altering_the_manufacturing_landsca"
+      - "phase_2_how_is_covid_19_altering_themanufacturing_landscap"
+    n_results: 5
+
+  # === Deindustrialization ===
+  - id: "deind_1"
+    query: "deindustrialization tertiarization suburbanization"
+    expected_doc_ids:
+      - "phase_2_deindustrialization__tertiarization_and_suburbaniz"
+    n_results: 5
+
+  - id: "deind_2"
+    query: "deindustrialization social economic sustainability"
+    expected_doc_ids:
+      - "phase_2_deindustrialization_and_the_social_and_economic_su"
+    n_results: 5
+
+  - id: "deind_3"
+    query: "deindustrialization cities Global South"
+    expected_doc_ids:
+      - "phase_2_deindustrialization_in_cities_of_the_global_south"
+    n_results: 5
+
+  # === Spatial Methods ===
+  - id: "spatial_1"
+    query: "spatial panel data analysis econometrics"
     expected_doc_ids:
       - "phase_4_elhorst_spatial_panel_data_analysis_encyclopedia_g"
     n_results: 5
     phase_filter: "Phase 4"
     topic_filter: "Spatial Panel Data Methods"
+
+  - id: "spatial_2"
+    query: "geo-nested analysis mixed methods spatially dependent"
+    expected_doc_ids:
+      - "phase_4_geo_nested_analysis__mixed_methods_research_with_s"
+    n_results: 5
+
+  # === INKAR / German Data ===
+  - id: "inkar_1"
+    query: "German administrative survey data wage inequality"
+    expected_doc_ids:
+      - "phase_4_a_tale_of_two_data_sets_comparing_german_administr"
+      - "phase_3_a_tale_of_two_data_sets_comparing_german_administr"
+    n_results: 5
+
+  - id: "inkar_2"
+    query: "socioeconomic deprivation index Germany health"
+    expected_doc_ids:
+      - "phase_3_german_index_of_socioeconomic_deprivation"
+      - "phase_1_regional_health_differences___developing_a_socioec"
+    n_results: 5
+
+  # === European / Transition Policy ===
+  - id: "eu_1"
+    query: "economic resilience German lignite regions transition"
+    expected_doc_ids:
+      - "phase_3_economic_resilience_of_german_lignite_regions"
+    n_results: 5
+
+  - id: "eu_2"
+    query: "just transition energy policy brief"
+    expected_doc_ids:
+      - "phase_1_just_transition_for_all"
+    n_results: 5
+
+  # === Governance / Institutions ===
+  - id: "gov_1"
+    query: "worldwide governance indicators methodology"
+    expected_doc_ids:
+      - "phase_4_the_worldwide_governance_indicators_methodology_20"
+    n_results: 5
+
+  - id: "gov_2"
+    query: "radical right regional variation support"
+    expected_doc_ids:
+      - "phase_4_assessing_regional_variation_in_support_for_the_ra"
+    n_results: 5
