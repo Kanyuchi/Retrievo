@@ -366,62 +366,72 @@ class AcademicPDFExtractor:
         return f"{phase_prefix}_{filename_part}"
 
     def _extract_pdf_metadata(self, doc: fitz.Document, metadata: PDFMetadata):
-        """Extract metadata from PDF properties, first pages, and filename."""
-        # First, try to extract from filename (often contains year and author)
-        self._extract_from_filename(metadata)
+        """Extract metadata from PDF properties, first pages, and filename.
 
-        # Try PDF metadata properties
+        Priority order for YEAR (to avoid wrong dates from scanned PDFs):
+        1. Filename (e.g., "2012_Thelen_Varieties.pdf") - most reliable
+        2. Text extraction (copyright, publication dates) - very reliable
+        3. PDF metadata date - LAST RESORT (often scan date, not publication)
+
+        Priority order for TITLE:
+        1. PDF metadata title (if not generic)
+        2. Text extraction from first pages
+        3. Fallback to cleaned filename
+        """
+        # Extract from first pages for text-based extraction
+        first_pages_text = ""
+        for page_num in range(min(self.metadata_pages, len(doc))):
+            first_pages_text += doc[page_num].get_text()
+
+        # === STEP 1: Extract from filename FIRST (most reliable for year/author) ===
+        self._extract_from_filename(metadata)
+        filename_year = metadata.year  # Remember if we got year from filename
+
+        # === STEP 2: Extract year from TEXT (before PDF metadata) ===
+        # Text-based year is more reliable than PDF creation/modification dates
+        if first_pages_text and not metadata.year:
+            text_year = self._extract_year_from_text(first_pages_text)
+            if text_year:
+                metadata.year = text_year
+
+        # === STEP 3: Try PDF metadata properties ===
         pdf_meta = doc.metadata
         if pdf_meta:
             # Title (only if not a generic/system title)
-            if pdf_meta.get("title"):
+            if pdf_meta.get("title") and not metadata.title:
                 title = pdf_meta["title"].strip()
                 # Skip generic titles like "Microsoft Word - doc.docx"
-                skip_patterns = ["Microsoft Word", "PowerPoint", ".docx", ".doc", ".pdf", "Untitled"]
-                if not any(skip in title for skip in skip_patterns) and len(title) > 10:
+                skip_patterns = ["Microsoft Word", "PowerPoint", ".docx", ".doc", ".pdf", "Untitled", "Scanned"]
+                if not any(skip.lower() in title.lower() for skip in skip_patterns) and len(title) > 8:
                     metadata.title = title
 
-            # Author(s) - Skip PDF metadata authors as they're often unreliable
-            # We'll extract authors from text instead, which has better validation
-
-            # Year (from creation date or modification date)
+            # Year from PDF metadata - ONLY as last resort
+            # PDF creation/mod dates are often wrong for scanned documents
             if not metadata.year:
                 for date_field in ["creationDate", "modDate"]:
                     if pdf_meta.get(date_field):
                         year_match = re.search(r'(\d{4})', pdf_meta[date_field])
                         if year_match:
                             year = int(year_match.group(1))
-                            if 1950 <= year <= datetime.now().year:
+                            # Be more conservative - only use if reasonable historical range
+                            # Reject very recent years (likely scan date, not publication)
+                            current_year = datetime.now().year
+                            if 1900 <= year <= current_year - 1:  # Exclude current year
                                 metadata.year = year
                                 break
 
-        # Extract from first pages if metadata incomplete
-        first_pages_text = ""
-        for page_num in range(min(self.metadata_pages, len(doc))):
-            first_pages_text += doc[page_num].get_text()
-
+        # === STEP 4: Text-based extraction for remaining fields ===
         # Extract title with improved heuristics
         if first_pages_text and not metadata.title:
             metadata.title = self._extract_title_from_text(first_pages_text)
 
+        # Fallback: Use cleaned filename as title if still missing
+        if not metadata.title:
+            metadata.title = self._title_from_filename(metadata.filename)
+
         # Extract authors from text if still missing
         if first_pages_text and not metadata.authors:
             metadata.authors = self._extract_authors_from_text(first_pages_text)
-
-        # Extract year from text (common patterns)
-        if first_pages_text and not metadata.year:
-            year_patterns = [
-                r'(?:published|received|accepted).*?(\d{4})',  # Publication dates
-                r'©\s*(\d{4})',  # Copyright year
-                r'\b((?:19|20)\d{2})\b',  # Any year 1900-2099
-            ]
-            for pattern in year_patterns:
-                year_match = re.search(pattern, first_pages_text, re.IGNORECASE)
-                if year_match:
-                    year = int(year_match.group(1))
-                    if 1950 <= year <= datetime.now().year:  # Reasonable range
-                        metadata.year = year
-                        break
 
         # Extract DOI with multiple patterns
         if first_pages_text and not metadata.doi:
@@ -489,6 +499,78 @@ class AcademicPDFExtractor:
 
         if metadata.doi:
             metadata.doi = metadata.doi.strip().lower().replace("https://doi.org/", "")
+
+    def _extract_year_from_text(self, text: str) -> Optional[int]:
+        """Extract publication year from document text.
+
+        Prioritizes reliable patterns like copyright and publication dates
+        over generic year mentions.
+        """
+        current_year = datetime.now().year
+
+        # Priority 1: Copyright year (very reliable)
+        copyright_match = re.search(r'[©Ⓒ]\s*(\d{4})', text)
+        if copyright_match:
+            year = int(copyright_match.group(1))
+            if 1900 <= year <= current_year:
+                return year
+
+        # Priority 2: Explicit publication/received dates
+        pub_patterns = [
+            r'(?:published|first published)[:\s]+.*?(\d{4})',
+            r'(?:received|accepted)[:\s]+.*?(\d{4})',
+            r'(?:vol\.|volume)\s*\d+.*?(\d{4})',  # Journal volume with year
+        ]
+        for pattern in pub_patterns:
+            match = re.search(pattern, text[:3000], re.IGNORECASE)
+            if match:
+                year = int(match.group(1))
+                if 1900 <= year <= current_year:
+                    return year
+
+        # Priority 3: Year in parentheses after author names (citation style)
+        # e.g., "Smith (2015)" or "Smith, 2015"
+        author_year = re.search(r'[A-Z][a-z]+\s*[\(,]\s*(\d{4})\)?', text[:2000])
+        if author_year:
+            year = int(author_year.group(1))
+            if 1900 <= year <= current_year:
+                return year
+
+        # Priority 4: Generic year pattern (less reliable)
+        # Look for years in reasonable range, prefer older years (likely publication, not scan)
+        years_found = re.findall(r'\b((?:19|20)\d{2})\b', text[:5000])
+        valid_years = [int(y) for y in years_found if 1900 <= int(y) <= current_year - 1]
+        if valid_years:
+            # Return the most common year, or oldest if tie
+            from collections import Counter
+            year_counts = Counter(valid_years)
+            most_common = year_counts.most_common(3)
+            if most_common:
+                # Prefer the oldest among common years (less likely to be scan date)
+                return min(y for y, _ in most_common)
+
+        return None
+
+    def _title_from_filename(self, filename: str) -> Optional[str]:
+        """Generate a readable title from filename as last resort."""
+        stem = Path(filename).stem
+
+        # Remove common prefixes (upload IDs, dates, etc.)
+        stem = re.sub(r'^[a-f0-9]{8}_', '', stem)  # Remove UUID prefix
+        stem = re.sub(r'^\d{4}[_\-]', '', stem)    # Remove year prefix
+
+        # Replace separators with spaces
+        title = re.sub(r'[_\-]+', ' ', stem)
+
+        # Clean up
+        title = re.sub(r'\s+', ' ', title).strip()
+
+        # Capitalize first letter of each word
+        if title:
+            title = title.title()
+            return title if len(title) > 3 else None
+
+        return None
 
     def _extract_from_filename(self, metadata: PDFMetadata):
         """Extract metadata from filename patterns like '2012_Thelen_Varieties.pdf'."""
@@ -565,41 +647,94 @@ class AcademicPDFExtractor:
                     break
 
     def _extract_title_from_text(self, text: str) -> Optional[str]:
-        """Extract title with improved heuristics."""
+        """Extract title with improved heuristics.
+
+        Strategy:
+        1. Look for the longest substantive line in the first ~40 lines
+        2. Skip obvious non-title lines (headers, footers, metadata)
+        3. Prefer lines that look like titles (capitalized, reasonable length)
+        """
         lines = text.split('\n')
 
-        # Skip common header elements
-        skip_words = ['journal', 'volume', 'issue', 'doi', 'http', 'www', 'page',
-                      'downloaded', 'accepted', 'received', 'published', 'copyright']
+        # Skip common header/footer elements
+        skip_patterns = [
+            'journal of', 'volume', 'issue', 'doi:', 'http', 'www.',
+            'downloaded', 'accepted:', 'received:', 'published:',
+            'copyright', 'all rights reserved', '@', 'university of',
+            'working paper', 'discussion paper', 'research paper',
+            'page ', 'pp.', 'issn', 'isbn'
+        ]
 
-        # Look for title in first 20 lines
-        for line in lines[:20]:
+        candidates = []
+
+        # Look for title in first 40 lines (expanded from 20)
+        for i, line in enumerate(lines[:40]):
             line = line.strip()
 
             # Skip empty or very short lines
-            if len(line) < 15:
+            if len(line) < 8:  # Reduced from 15
                 continue
 
             # Skip lines that look like headers/footers
             line_lower = line.lower()
-            if any(skip in line_lower for skip in skip_words):
+            if any(skip in line_lower for skip in skip_patterns):
                 continue
 
-            # Skip lines that are all uppercase or have too many numbers
-            if line.isupper() and len(line) > 50:
-                continue
-            if sum(c.isdigit() for c in line) > len(line) * 0.3:
+            # Skip lines with too many numbers (likely page numbers, dates lists)
+            digit_ratio = sum(c.isdigit() for c in line) / max(len(line), 1)
+            if digit_ratio > 0.25:
                 continue
 
             # Skip email addresses and URLs
             if '@' in line or 'http' in line.lower():
                 continue
 
-            # Looks like a reasonable title
-            if 15 < len(line) < 300:
-                # Clean up the title
-                title = re.sub(r'\s+', ' ', line)
-                return title
+            # Skip very long lines (likely paragraphs, not titles)
+            if len(line) > 200:
+                continue
+
+            # Calculate a "title score" for this line
+            score = 0
+
+            # Bonus: Line is in first 15 lines (more likely to be title)
+            if i < 15:
+                score += 2
+
+            # Bonus: Line starts with capital letter
+            if line[0].isupper():
+                score += 1
+
+            # Bonus: Reasonable title length (20-150 chars)
+            if 20 <= len(line) <= 150:
+                score += 2
+            elif 10 <= len(line) <= 200:
+                score += 1
+
+            # Bonus: Title case or sentence case
+            words = line.split()
+            if len(words) >= 2:
+                caps_words = sum(1 for w in words if w[0].isupper())
+                if caps_words >= len(words) * 0.5:
+                    score += 1
+
+            # Bonus: Contains colon (common in academic titles)
+            if ':' in line:
+                score += 1
+
+            # Penalty: All caps and long (probably a header)
+            if line.isupper() and len(line) > 60:
+                score -= 2
+
+            candidates.append((score, i, line))
+
+        # Sort by score (descending), then by position (ascending)
+        candidates.sort(key=lambda x: (-x[0], x[1]))
+
+        if candidates and candidates[0][0] > 0:
+            title = candidates[0][2]
+            # Clean up the title
+            title = re.sub(r'\s+', ' ', title).strip()
+            return title
 
         return None
 

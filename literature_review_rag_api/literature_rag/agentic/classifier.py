@@ -158,8 +158,23 @@ class QueryClassifier:
         signals: List[str] = []
         query_lower = query.lower().strip()
         word_count = len(query.split())
-        topic_count = self._count_topics(query_lower)
         question_count = query.count("?")
+
+        # FAST PATH: Quick exit for obviously simple queries
+        # Short queries with simple patterns can skip complex pattern matching
+        if word_count <= self.simple_max_words and question_count <= 1:
+            simple_matches = self._match_patterns(query_lower, self.simple_regex)
+            if simple_matches:
+                # Definitely simple - skip other pattern matching
+                return ClassificationResult(
+                    complexity=QueryComplexity.SIMPLE,
+                    confidence=0.95,
+                    signals=[f"simple_pattern:{p}" for p in simple_matches] + ["fast_path"],
+                    word_count=word_count,
+                    topic_count=self._count_topics(query_lower)
+                )
+
+        topic_count = self._count_topics(query_lower)
 
         # Check for complex patterns first (higher priority)
         complex_matches = self._match_patterns(query_lower, self.complex_regex)

@@ -476,7 +476,9 @@ class AgenticRAGPipeline:
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """Generate answer from chunks."""
         context = format_context_for_prompt(chunks)
-        citation_guide = format_citation_guide(chunks)
+
+        # Only format citation guide when needed (skip for simple queries)
+        citation_guide = None if simple else format_citation_guide(chunks)
 
         if simple:
             prompt = SIMPLE_GENERATION_PROMPT.format(
