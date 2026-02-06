@@ -274,3 +274,98 @@ def get_storage() -> S3Storage:
     if _storage_instance is None:
         _storage_instance = S3Storage()
     return _storage_instance
+
+
+class LocalStorage:
+    """Local filesystem storage fallback for development."""
+
+    def __init__(self, base_path: str = "./uploads"):
+        """Initialize local storage."""
+        import os
+        self.base_path = base_path
+        os.makedirs(base_path, exist_ok=True)
+        logger.info(f"Local Storage initialized: base_path={self.base_path}")
+
+    def _get_document_path(self, job_id: Union[int, str, None], phase: str, topic: str, filename: str) -> str:
+        """Generate local path for a document."""
+        import os
+        safe_phase = phase.replace('/', '_').replace(' ', '_')
+        safe_topic = topic.replace('/', '_').replace(' ', '_')
+        safe_filename = filename.replace('/', '_')
+
+        if job_id is None or str(job_id).lower() == "default":
+            prefix = "collections/default"
+        elif str(job_id).isdigit():
+            prefix = f"jobs/{job_id}"
+        else:
+            prefix = f"collections/{job_id}"
+
+        dir_path = os.path.join(self.base_path, prefix, "pdfs", safe_phase, safe_topic)
+        os.makedirs(dir_path, exist_ok=True)
+        return os.path.join(dir_path, safe_filename)
+
+    def upload_pdf(
+        self,
+        job_id: Union[int, str, None],
+        phase: str,
+        topic: str,
+        filename: str,
+        file_content: BinaryIO,
+        content_type: str = 'application/pdf',
+    ) -> str:
+        """Save a PDF to local storage."""
+        local_path = self._get_document_path(job_id, phase, topic, filename)
+
+        with open(local_path, 'wb') as f:
+            f.write(file_content.read())
+
+        logger.info(f"Saved PDF locally: {local_path}")
+        return local_path
+
+    def download_pdf(self, local_path: str) -> bytes:
+        """Read a PDF from local storage."""
+        with open(local_path, 'rb') as f:
+            return f.read()
+
+    def delete_pdf(self, local_path: str) -> bool:
+        """Delete a PDF from local storage."""
+        import os
+        if os.path.exists(local_path):
+            os.remove(local_path)
+            logger.info(f"Deleted local PDF: {local_path}")
+            return True
+        return False
+
+    def get_presigned_url(self, local_path: str, expiration: int = 3600) -> str:
+        """For local storage, return a file:// URL or placeholder."""
+        return f"file://{local_path}"
+
+    def file_exists(self, local_path: str) -> bool:
+        """Check if file exists locally."""
+        import os
+        return os.path.exists(local_path)
+
+
+# Local storage singleton
+_local_storage_instance: Optional[LocalStorage] = None
+
+
+def get_local_storage() -> LocalStorage:
+    """Get or create the local storage singleton."""
+    global _local_storage_instance
+    if _local_storage_instance is None:
+        _local_storage_instance = LocalStorage()
+    return _local_storage_instance
+
+
+def is_s3_configured() -> bool:
+    """Check if S3 credentials are configured."""
+    return bool(os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_SECRET_ACCESS_KEY'))
+
+
+def get_storage_auto():
+    """Get appropriate storage backend based on configuration."""
+    if is_s3_configured():
+        return get_storage()
+    else:
+        return get_local_storage()

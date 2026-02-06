@@ -21,7 +21,7 @@ from ..models import (
     JobCreateRequest, JobResponse, JobListResponse
 )
 from ..config import load_config
-from ..storage import get_storage
+from ..storage import get_storage, get_storage_auto, is_s3_configured
 from ..indexer import DocumentIndexer
 from ..isolation import (
     get_tenant_context, TenantContext, verify_job_access,
@@ -455,7 +455,7 @@ async def get_job_document_download_url(
             detail="Document storage key not available"
         )
 
-    storage = get_storage()
+    storage = get_storage_auto()
     url = storage.get_presigned_url(document.storage_key)
     return {"doc_id": doc_id, "download_url": url}
 
@@ -814,8 +814,8 @@ async def upload_to_job(
                 detail=result.get("error", "Failed to index document")
             )
 
-        # Upload to S3 (single storage backend)
-        storage = get_storage()
+        # Upload to storage (S3 if configured, otherwise local)
+        storage = get_storage_auto()
         try:
             with open(temp_file, "rb") as f:
                 storage_key = storage.upload_pdf(
@@ -835,7 +835,7 @@ async def upload_to_job(
                 temp_file.unlink()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"S3 upload failed: {e}"
+                detail=f"Storage upload failed: {e}"
             )
 
         if temp_file.exists():
@@ -948,14 +948,14 @@ async def delete_job_document(
         else:
             chunks_deleted = 0
 
-        # Try to delete from S3 if storage key exists
+        # Try to delete from storage if storage key exists
         if document.storage_key:
             try:
-                storage = get_storage()
+                storage = get_storage_auto()
                 storage.delete_pdf(document.storage_key)
-                logger.info(f"Deleted PDF from S3: {document.storage_key}")
+                logger.info(f"Deleted PDF from storage: {document.storage_key}")
             except Exception as e:
-                logger.warning(f"Failed to delete from S3: {e}")
+                logger.warning(f"Failed to delete from storage: {e}")
 
         # Delete document record first
         db.delete(document)
