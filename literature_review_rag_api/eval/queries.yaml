@@ -1,0 +1,15 @@
+queries:
+  - id: "q1"
+    query: "business formation in Ruhr Valley"
+    expected_doc_ids:
+      - "phase_2_ruhr_innovationsreport_2020_en"
+    n_results: 5
+    phase_filter: "Phase 2"
+    topic_filter: "Business Formation"
+  - id: "q2"
+    query: "spatial panel data methods"
+    expected_doc_ids:
+      - "phase_4_elhorst_spatial_panel_data_analysis_encyclopedia_g"
+    n_results: 5
+    phase_filter: "Phase 4"
+    topic_filter: "Spatial Panel Data Methods"

@@ -425,6 +425,10 @@ class JobCreateRequest(BaseModel):
     """Request model for creating a job."""
     name: str = Field(..., min_length=1, max_length=255, description="Job name")
     description: Optional[str] = Field(default=None, description="Job description")
+    term_maps: Optional[Dict[str, List[List[str]]]] = Field(
+        default=None,
+        description="Optional term normalization maps for this job"
+    )
 
     class Config:
         json_schema_extra = {
@@ -440,6 +444,7 @@ class JobResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    term_maps: Optional[Dict[str, List[List[str]]]] = None
     collection_name: str
     status: str
     document_count: int

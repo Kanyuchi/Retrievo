@@ -1,0 +1,261 @@
+queries:
+- id: phase_1_institutional_economics_regional_development_core_framework_literature
+  query: institutional economics regional varieties liberalization politics
+  expected_doc_ids:
+  - phase_1_2012_thelen_varieties_liberalization_pdf
+  - phase_1_an_introduction_to_varieties_of_capitalism
+  - phase_1_foster_thelen_2024_coordination_rights_competition
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: Institutional_Economics_Regional_Development_Core_Framework_Literature
+- id: phase_2_business_formation
+  query: business formation formation
+  expected_doc_ids:
+  - phase_2_2008_fritsch_mueller_the_case_of_germany_sbe
+  - phase_2_about_the_region
+  - phase_2_business_cycles_and_start_ups_across_industries_an
+  n_results: 9
+  phase_filter: Phase 2
+  topic_filter: Business Formation
+- id: phase_2_deindustrialization_&_tertiarization
+  query: deindustrialization tertiarization delve deeply current understanding
+  expected_doc_ids:
+  - phase_2_deindustrialization__tertiarization_and_suburbaniz
+  - phase_2_deindustrialization_and_the_social_and_economic_su
+  - phase_2_deindustrialization_in_cities_of_the_global_south
+  n_results: 9
+  phase_filter: Phase 2
+  topic_filter: Deindustrialization & Tertiarization
+- id: phase_3_municipal_strategy_documents
+  query: municipal strategy documents
+  expected_doc_ids:
+  - phase_3_230904_whitepaperiv_lebensqualita_t_innenstadtdial
+  - phase_3_bmr_wirtschaftskonferenz_ruhr_2025_positionspapier
+  - phase_3_bochum_strategy_presentation
+  n_results: 9
+  phase_filter: Phase 3
+  topic_filter: Municipal Strategy Documents
+- id: phase_3_city-specific_studies
+  query: cityspecific analyse historischen strukturwandels
+  expected_doc_ids:
+  - phase_3_2025_03_03_cc_29_2021_fallstudie_analyse_historisc
+  - phase_3_38895079x
+  - phase_3_appendix_4a_ruhr_valley_case_study
+  n_results: 9
+  phase_filter: Phase 3
+  topic_filter: City-Specific Studies
+- id: phase_3_inkar_&_landesdatenbank_studies
+  query: inkar landesdatenbank iabs sample integrated labour
+  expected_doc_ids:
+  - phase_3_a_tale_of_two_data_sets_comparing_german_administr
+  - phase_3_gebietsreformen__politische_entscheidungen_und_fol
+  - phase_3_german_index_of_socioeconomic_deprivation
+  n_results: 9
+  phase_filter: Phase 3
+  topic_filter: INKAR & Landesdatenbank Studies
+- id: phase_1_german-focused_studies
+  query: germanfocused germany ruhr regions
+  expected_doc_ids:
+  - phase_1_germany__the_ruhr_region_s_pivot_from_coal_mining_
+  - phase_1_just_transition_for_regions_and_generations_experi
+  - phase_1_lessons_from_germany_s_hard_coal_mining_phase_out_
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: German-Focused Studies
+- id: phase_2_covid-19_impact_studies
+  query: covid19 covid sectoral productivity
+  expected_doc_ids:
+  - phase_2_covid_19_s_impact_on_sectoral_productivity__short_
+  - phase_2_how_is_covid_19_altering_the_manufacturing_landsca
+  - phase_2_how_is_covid_19_altering_themanufacturing_landscap
+  n_results: 9
+  phase_filter: Phase 2
+  topic_filter: COVID-19 Impact Studies
+- id: phase_4_inkar_data_applications
+  query: inkar data applications hand address spatial economic
+  expected_doc_ids:
+  - phase_4_assessing_regional_variation_in_support_for_the_ra
+  - phase_4_johm_2_2_98
+  - phase_4_managing_the_transition_to_a_dual_business_model_t
+  n_results: 9
+  phase_filter: Phase 4
+  topic_filter: INKAR Data Applications
+- id: phase_4_spatial_panel_data_methods
+  query: spatial panel data spatial panel data
+  expected_doc_ids:
+  - phase_4_elhorst_spatial_panel_data_analysis_encyclopedia_g
+  - phase_4_fingleton_2023_a_spatial_econometric_analysis_of_p
+  - phase_4_new_administrative_data_on_welfare
+  n_results: 9
+  phase_filter: Phase 4
+  topic_filter: Spatial Panel Data Methods
+- id: phase_1_post-industrial_regional_transitions_seminal_works
+  query: postindustrial regional transitions background transition ruhr region
+  expected_doc_ids:
+  - phase_1_how_to_avoid_unjust_energy_transitions_insights_fr
+  - phase_1_just_transition_for_all
+  - phase_1_the_strategy_of_industrial_clusters_to_deal_with_d
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: Post-Industrial Regional Transitions_Seminal Works
+- id: phase_2_business_model_innovation
+  query: business model innovation business
+  expected_doc_ids:
+  - phase_2_drivers_of_sustainable_business_model_innovations_
+  - phase_2_managing_the_transition_to_a_dual_business_model_t
+  - phase_2_the_business_model_in_sustainability_transitions_a
+  n_results: 9
+  phase_filter: Phase 2
+  topic_filter: Business Model Innovation
+- id: phase_3_european_regional_policy_studies
+  query: european regional policy recalls development german lignite
+  expected_doc_ids:
+  - phase_3_economic_resilience_of_german_lignite_regions
+  - phase_3_germany_s_real_challenges_are_aging__underinvestme
+  - phase_3_transition_report_2024_25
+  n_results: 9
+  phase_filter: Phase 3
+  topic_filter: European Regional Policy Studies
+- id: phase_1_recent_theoretical_developments_(2020-2024)
+  query: recent theoretical developments system regional economic resilience
+  expected_doc_ids:
+  - phase_1_regional_economic_resilience__towards_a_system_app
+  - phase_1_trippl_et_al_2023_rethinking_regional_economic_res
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: Recent Theoretical Developments (2020-2024)
+- id: phase_3_ruhr_valley_case_studies_energy_just_ransition
+  query: ruhr valley energy ruhr
+  expected_doc_ids:
+  - phase_3_how_to_avoid_unjust_energy_transitions
+  - phase_3_solar_city_gelsenkirchen_from_thousand_fires_to_th
+  n_results: 9
+  phase_filter: Phase 3
+  topic_filter: Ruhr_Valley_Case_Studies_Energy_Just_ransition
+- id: phase_4_software_implementation
+  query: software implementation spatial econometrics
+  expected_doc_ids:
+  - phase_4_gc_ws1819_elhorst_presentation
+  - phase_4_spatial_panel_data_models_in_r
+  n_results: 9
+  phase_filter: Phase 4
+  topic_filter: Software Implementation
+- id: phase_1_administrative_data_integration
+  query: administrative data integration introduction philosophy science
+  expected_doc_ids:
+  - phase_1_57327a90_03_staley_ch1_2
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: Administrative Data Integration
+- id: phase_1_varieties_of_capitalism
+  query: varieties capitalism summary statistics number observations
+  expected_doc_ids:
+  - phase_1_685c383b_varieties_of_capitalism_hall_soskice
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: Varieties of Capitalism
+- id: phase_1_inkar-specific_research
+  query: inkarspecific germany regional differences various
+  expected_doc_ids:
+  - phase_1_regional_health_differences___developing_a_socioec
+  n_results: 9
+  phase_filter: Phase 1
+  topic_filter: INKAR-Specific Research
+- id: phase_4_administrative_data_integration
+  query: administrative data integration iabs sample integrated labour
+  expected_doc_ids:
+  - phase_4_a_tale_of_two_data_sets_comparing_german_administr
+  n_results: 9
+  phase_filter: Phase 4
+  topic_filter: Administrative Data Integration
+- id: unfiltered_institutional_economics_regional_development_core_framework_literature
+  query: institutional economics regional varieties liberalization politics
+  expected_doc_ids:
+  - phase_1_2012_thelen_varieties_liberalization_pdf
+  - phase_1_an_introduction_to_varieties_of_capitalism
+  - phase_1_foster_thelen_2024_coordination_rights_competition
+  n_results: 9
+- id: unfiltered_business_formation
+  query: business formation formation
+  expected_doc_ids:
+  - phase_2_2008_fritsch_mueller_the_case_of_germany_sbe
+  - phase_2_about_the_region
+  - phase_2_business_cycles_and_start_ups_across_industries_an
+  n_results: 9
+- id: unfiltered_deindustrialization_&_tertiarization
+  query: deindustrialization tertiarization delve deeply current understanding
+  expected_doc_ids:
+  - phase_2_deindustrialization__tertiarization_and_suburbaniz
+  - phase_2_deindustrialization_and_the_social_and_economic_su
+  - phase_2_deindustrialization_in_cities_of_the_global_south
+  n_results: 9
+- id: unfiltered_municipal_strategy_documents
+  query: municipal strategy documents
+  expected_doc_ids:
+  - phase_3_230904_whitepaperiv_lebensqualita_t_innenstadtdial
+  - phase_3_bmr_wirtschaftskonferenz_ruhr_2025_positionspapier
+  - phase_3_bochum_strategy_presentation
+  n_results: 9
+- id: unfiltered_city-specific_studies
+  query: cityspecific analyse historischen strukturwandels
+  expected_doc_ids:
+  - phase_3_2025_03_03_cc_29_2021_fallstudie_analyse_historisc
+  - phase_3_38895079x
+  - phase_3_appendix_4a_ruhr_valley_case_study
+  n_results: 9
+- id: unfiltered_inkar_&_landesdatenbank_studies
+  query: inkar landesdatenbank iabs sample integrated labour
+  expected_doc_ids:
+  - phase_3_a_tale_of_two_data_sets_comparing_german_administr
+  - phase_3_gebietsreformen__politische_entscheidungen_und_fol
+  - phase_3_german_index_of_socioeconomic_deprivation
+  n_results: 9
+- id: unfiltered_german-focused_studies
+  query: germanfocused germany ruhr regions
+  expected_doc_ids:
+  - phase_1_germany__the_ruhr_region_s_pivot_from_coal_mining_
+  - phase_1_just_transition_for_regions_and_generations_experi
+  - phase_1_lessons_from_germany_s_hard_coal_mining_phase_out_
+  n_results: 9
+- id: unfiltered_covid-19_impact_studies
+  query: covid19 covid sectoral productivity
+  expected_doc_ids:
+  - phase_2_covid_19_s_impact_on_sectoral_productivity__short_
+  - phase_2_how_is_covid_19_altering_the_manufacturing_landsca
+  - phase_2_how_is_covid_19_altering_themanufacturing_landscap
+  n_results: 9
+- id: unfiltered_inkar_data_applications
+  query: inkar data applications hand address spatial economic
+  expected_doc_ids:
+  - phase_4_assessing_regional_variation_in_support_for_the_ra
+  - phase_4_johm_2_2_98
+  - phase_4_managing_the_transition_to_a_dual_business_model_t
+  n_results: 9
+- id: unfiltered_spatial_panel_data_methods
+  query: spatial panel data spatial panel data
+  expected_doc_ids:
+  - phase_4_elhorst_spatial_panel_data_analysis_encyclopedia_g
+  - phase_4_fingleton_2023_a_spatial_econometric_analysis_of_p
+  - phase_4_new_administrative_data_on_welfare
+  n_results: 9
+- id: unfiltered_post-industrial_regional_transitions_seminal_works
+  query: postindustrial regional transitions background transition ruhr region
+  expected_doc_ids:
+  - phase_1_how_to_avoid_unjust_energy_transitions_insights_fr
+  - phase_1_just_transition_for_all
+  - phase_1_the_strategy_of_industrial_clusters_to_deal_with_d
+  n_results: 9
+- id: unfiltered_business_model_innovation
+  query: business model innovation business
+  expected_doc_ids:
+  - phase_2_drivers_of_sustainable_business_model_innovations_
+  - phase_2_managing_the_transition_to_a_dual_business_model_t
+  - phase_2_the_business_model_in_sustainability_transitions_a
+  n_results: 9
+- id: unfiltered_european_regional_policy_studies
+  query: european regional policy recalls development german lignite
+  expected_doc_ids:
+  - phase_3_economic_resilience_of_german_lignite_regions
+  - phase_3_germany_s_real_challenges_are_aging__underinvestme
+  - phase_3_transition_report_2024_25
+  n_results: 9

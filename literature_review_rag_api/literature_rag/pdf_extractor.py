@@ -379,6 +379,33 @@ class AcademicPDFExtractor:
                 keywords = re.split(r'[,;•·]', kw_text)
                 metadata.keywords = [kw.strip() for kw in keywords if kw.strip() and len(kw.strip()) > 2][:10]
 
+        # Normalize metadata fields for consistency
+        self._normalize_metadata_fields(metadata)
+
+    def _normalize_metadata_fields(self, metadata: PDFMetadata) -> None:
+        """Normalize metadata fields (authors/year/doi/title)."""
+        if metadata.title:
+            metadata.title = " ".join(metadata.title.split())
+
+        if metadata.authors:
+            normalized = []
+            for author in metadata.authors:
+                if not author:
+                    continue
+                cleaned = " ".join(str(author).split())
+                if cleaned and cleaned not in normalized:
+                    normalized.append(cleaned)
+            metadata.authors = normalized if normalized else metadata.authors
+
+        if metadata.year:
+            try:
+                metadata.year = int(metadata.year)
+            except (TypeError, ValueError):
+                metadata.year = None
+
+        if metadata.doi:
+            metadata.doi = metadata.doi.strip().lower().replace("https://doi.org/", "")
+
     def _extract_from_filename(self, metadata: PDFMetadata):
         """Extract metadata from filename patterns like '2012_Thelen_Varieties.pdf'."""
         filename = metadata.filename

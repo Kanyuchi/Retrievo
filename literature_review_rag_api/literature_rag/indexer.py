@@ -188,12 +188,28 @@ class DocumentIndexer:
         additional_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Prepare base metadata for chunks."""
+        normalized_authors = None
+        if metadata.authors:
+            if isinstance(metadata.authors, list):
+                normalized_authors = ", ".join(a for a in metadata.authors if a)
+            else:
+                normalized_authors = str(metadata.authors).strip()
+
+        normalized_year = metadata.year
+        try:
+            if normalized_year is not None:
+                normalized_year = int(normalized_year)
+        except (TypeError, ValueError):
+            normalized_year = None
+
+        normalized_doi = metadata.doi.strip().lower() if metadata.doi else None
+
         chunk_base_metadata = {
             "doc_id": metadata.doc_id,
-            "title": metadata.title,
-            "authors": ", ".join(metadata.authors) if metadata.authors else "",
-            "year": metadata.year,
-            "doi": metadata.doi,
+            "title": " ".join(metadata.title.split()) if metadata.title else metadata.title,
+            "authors": normalized_authors or "",
+            "year": normalized_year,
+            "doi": normalized_doi,
             "phase": metadata.phase,
             "phase_name": metadata.phase_name,
             "topic_category": metadata.topic_category,

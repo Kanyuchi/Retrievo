@@ -27,7 +27,8 @@ class JobCollectionRAG:
     def __init__(
         self,
         collection: chromadb.Collection,
-        embedding_model: str = None
+        embedding_model: str = None,
+        term_maps: Optional[Dict[str, List[List[str]]]] = None
     ):
         """
         Initialize the job collection RAG.
@@ -38,6 +39,8 @@ class JobCollectionRAG:
         """
         self.collection = collection
         self.config = load_config()
+        self.term_maps = term_maps or {}
+        self.normalization_enabled = bool(term_maps)
 
         # Initialize embeddings
         embedding_model = embedding_model or self.config.embedding.model
@@ -49,7 +52,63 @@ class JobCollectionRAG:
             encode_kwargs={"normalize_embeddings": True}
         )
 
+        self._reranker = None
+        self._reranker_config = {
+            "enabled": self.config.retrieval.use_reranking,
+            "model": self.config.retrieval.reranker_model,
+            "rerank_top_k": self.config.retrieval.rerank_top_k,
+            "device": device
+        }
+
         logger.info(f"JobCollectionRAG initialized for collection: {collection.name}")
+
+    def _load_term_maps(self, yaml_term_maps: dict) -> Dict[str, Dict[str, List[str]]]:
+        term_maps = {}
+        for category, term_groups in yaml_term_maps.items():
+            term_maps[category] = {}
+            for term_group in term_groups:
+                if len(term_group) > 0:
+                    canonical = term_group[0]
+                    variants = term_group[1:] if len(term_group) > 1 else []
+                    term_maps[category][canonical] = variants
+        return term_maps
+
+    def normalize_query(self, question: str) -> str:
+        if not self.normalization_enabled or not self.term_maps:
+            return question
+        detected_terms = []
+        query_lower = question.lower()
+        expansion_terms = []
+        max_expansions = self.config.retrieval.max_expansions
+
+        term_maps = self._load_term_maps(self.term_maps)
+        for _, term_dict in term_maps.items():
+            for canonical, variants in term_dict.items():
+                if canonical.lower() in query_lower:
+                    detected_terms.append(canonical)
+                    expansion_terms.extend(variants[:max_expansions])
+                    continue
+                for variant in variants:
+                    if variant.lower() in query_lower:
+                        detected_terms.append(canonical)
+                        expansion_terms.append(canonical)
+                        expansion_terms.extend([v for v in variants[:max_expansions] if v != variant])
+                        break
+
+        if expansion_terms and self.config.retrieval.expand_queries:
+            return question + " " + " ".join(expansion_terms)
+        return question
+
+    def _get_reranker(self):
+        if not self._reranker_config.get("enabled"):
+            return None
+        if self._reranker is None:
+            from .reranker import CrossEncoderReranker
+            self._reranker = CrossEncoderReranker(
+                model_name=self._reranker_config.get("model"),
+                device=self._reranker_config.get("device")
+            )
+        return self._reranker
 
     def is_ready(self) -> bool:
         """Check if the collection is ready."""
@@ -68,8 +127,9 @@ class JobCollectionRAG:
 
         Returns results in the same format as LiteratureReviewRAG.query()
         """
+        expanded_query = self.normalize_query(question)
         # Embed query
-        query_embedding = self.embeddings.embed_query(question)
+        query_embedding = self.embeddings.embed_query(expanded_query)
 
         # Build filters
         where_filter = None
@@ -86,12 +146,31 @@ class JobCollectionRAG:
             where_filter = {"$and": conditions}
 
         # Query collection
+        rerank_top_k = self._reranker_config.get("rerank_top_k", n_results)
+        candidate_k = max(n_results, rerank_top_k) if self._reranker_config.get("enabled") else n_results
+
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results,
+            n_results=candidate_k,
             where=where_filter,
             include=["documents", "metadatas", "distances"]
         )
+
+        # Rerank if enabled
+        reranker = self._get_reranker()
+        if reranker and results.get("documents") and results["documents"][0]:
+            docs = results["documents"][0]
+            metas = results["metadatas"][0]
+            dists = results["distances"][0]
+            scores = reranker.score(question, docs)
+            ranked = list(zip(scores, docs, metas, dists))
+            ranked.sort(key=lambda x: x[0], reverse=True)
+            ranked = ranked[:n_results]
+            return {
+                "documents": [[item[1] for item in ranked]],
+                "metadatas": [[item[2] for item in ranked]],
+                "distances": [[item[3] for item in ranked]]
+            }
 
         return results
 

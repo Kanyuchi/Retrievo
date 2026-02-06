@@ -35,6 +35,10 @@ def get_rag_system():
                 "collection_name": config.storage.collection_name,
                 "expand_queries": config.retrieval.expand_queries,
                 "max_expansions": config.retrieval.max_expansions,
+                "use_reranking": config.retrieval.use_reranking,
+                "reranker_model": config.retrieval.reranker_model,
+                "rerank_top_k": config.retrieval.rerank_top_k,
+                "normalization_enable": config.normalization.enable,
                 "term_maps": config.normalization.term_maps
             },
             embedding_model=config.embedding.model

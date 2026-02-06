@@ -366,21 +366,11 @@ Edit `config/literature_config.yaml` to customize:
 If you use this system in your research, please cite:
 
 ```
-Literature Review RAG System
-Adapted from Personality RAG (100% MBTI accuracy, 15ms queries)
-GitHub: [your-repo]
-```
 
 ## 📄 License
 
 [Your License Here]
 
-## 🙏 Acknowledgments
-
-This system is adapted from the personality RAG system, which achieved:
-- 100% MBTI code mapping accuracy
-- 15.1ms average query speed
-- 95.4% performance improvement over production
 
 Key patterns replicated:
 - Explicit normalization (MBTI codes → Academic terms)

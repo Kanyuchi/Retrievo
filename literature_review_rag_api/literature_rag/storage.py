@@ -5,7 +5,7 @@ import os
 import io
 import boto3
 from botocore.exceptions import ClientError
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,21 +43,26 @@ class S3Storage:
 
         logger.info(f"S3 Storage initialized: bucket={self.bucket_name}, region={self.region}")
 
-    def _get_job_prefix(self, job_id: int) -> str:
-        """Get S3 key prefix for a job."""
-        return f"jobs/{job_id}/pdfs"
+    def _get_owner_prefix(self, owner_id: Union[int, str, None]) -> str:
+        """Get S3 key prefix for a job or default collection."""
+        if owner_id is None or str(owner_id).lower() == "default":
+            return "collections/default"
+        if str(owner_id).isdigit():
+            return f"jobs/{owner_id}"
+        return f"collections/{owner_id}"
 
-    def _get_document_key(self, job_id: int, phase: str, topic: str, filename: str) -> str:
+    def _get_document_key(self, owner_id: Union[int, str, None], phase: str, topic: str, filename: str) -> str:
         """Generate S3 key for a document."""
         # Sanitize phase and topic for use in S3 key
         safe_phase = phase.replace('/', '_').replace(' ', '_')
         safe_topic = topic.replace('/', '_').replace(' ', '_')
         safe_filename = filename.replace('/', '_')
-        return f"jobs/{job_id}/pdfs/{safe_phase}/{safe_topic}/{safe_filename}"
+        prefix = self._get_owner_prefix(owner_id)
+        return f"{prefix}/pdfs/{safe_phase}/{safe_topic}/{safe_filename}"
 
     def upload_pdf(
         self,
-        job_id: int,
+        job_id: Union[int, str, None],
         phase: str,
         topic: str,
         filename: str,
@@ -88,7 +93,7 @@ class S3Storage:
                 ExtraArgs={
                     'ContentType': content_type,
                     'Metadata': {
-                        'job_id': str(job_id),
+                        'job_id': str(job_id) if job_id is not None else "default",
                         'phase': phase,
                         'topic': topic,
                         'original_filename': filename,
@@ -155,9 +160,9 @@ class S3Storage:
             logger.error(f"Failed to delete PDF from S3: {e}")
             raise
 
-    def delete_job_files(self, job_id: int) -> int:
+    def delete_job_files(self, job_id: Union[int, str, None]) -> int:
         """
-        Delete all files for a job.
+        Delete all files for a job or default collection.
 
         Args:
             job_id: The job ID
@@ -165,7 +170,7 @@ class S3Storage:
         Returns:
             Number of files deleted
         """
-        prefix = self._get_job_prefix(job_id)
+        prefix = self._get_owner_prefix(job_id)
         deleted_count = 0
 
         try:
@@ -192,9 +197,9 @@ class S3Storage:
             logger.error(f"Failed to delete job files from S3: {e}")
             raise
 
-    def list_job_files(self, job_id: int) -> list:
+    def list_job_files(self, job_id: Union[int, str, None]) -> list:
         """
-        List all files for a job.
+        List all files for a job or default collection.
 
         Args:
             job_id: The job ID
@@ -202,7 +207,7 @@ class S3Storage:
         Returns:
             List of S3 keys
         """
-        prefix = self._get_job_prefix(job_id)
+        prefix = self._get_owner_prefix(job_id)
         files = []
 
         try:

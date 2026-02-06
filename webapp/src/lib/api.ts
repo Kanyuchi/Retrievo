@@ -205,6 +205,7 @@ export interface Job {
   id: number;
   name: string;
   description: string | null;
+  term_maps?: Record<string, string[][]> | null;
   collection_name: string;
   status: string;
   document_count: number;
@@ -624,6 +625,32 @@ class ApiClient {
       method: 'PATCH',
       headers,
       body: JSON.stringify(updates),
+    });
+  }
+
+  // Get job term maps
+  async getJobTermMaps(jobId: number, accessToken?: string): Promise<{ term_maps: Record<string, string[][]> }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/term-maps`, { headers });
+  }
+
+  // Update job term maps
+  async updateJobTermMaps(
+    jobId: number,
+    termMaps: Record<string, string[][]>,
+    accessToken?: string
+  ): Promise<Job> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/term-maps`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(termMaps),
     });
   }
 

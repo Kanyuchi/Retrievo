@@ -6,8 +6,8 @@ Adapted from personality RAG API patterns.
 
 import logging
 import os
-import shutil
 import uuid
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -44,12 +44,13 @@ from .models import (
 )
 from .indexer import DocumentIndexer, create_indexer_from_rag
 from .tasks import task_store, TaskStatus, process_pdf_task, run_async_task
+from .storage import get_storage
+from .database import get_db_session, DefaultDocumentCRUD
+from .auth import get_current_user_optional
+from .logging_utils import setup_logging, request_id_ctx
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Setup structured logging (default INFO, overridden after config load)
+setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 # Global RAG system instance
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
         # Load configuration
         config = load_config()
         logger.info(f"Configuration loaded from {config.storage.indices_path}")
+        setup_logging(getattr(config.advanced, "log_level", "INFO"))
 
         # Initialize RAG system
         rag_system = LiteratureReviewRAG(
@@ -80,6 +82,10 @@ async def lifespan(app: FastAPI):
                 "collection_name": config.storage.collection_name,
                 "expand_queries": config.retrieval.expand_queries,
                 "max_expansions": config.retrieval.max_expansions,
+                "use_reranking": config.retrieval.use_reranking,
+                "reranker_model": config.retrieval.reranker_model,
+                "rerank_top_k": config.retrieval.rerank_top_k,
+                "normalization_enable": config.normalization.enable,
                 "term_maps": config.normalization.term_maps
             },
             embedding_model=config.embedding.model
@@ -185,6 +191,33 @@ app = FastAPI(
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_auth = HTTPBearer(auto_error=False)
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    token = request_id_ctx.set(request_id)
+    start_time = time.time()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        duration_ms = int((time.time() - start_time) * 1000)
+        status_code = response.status_code if response else 500
+        if response is not None:
+            response.headers["X-Request-Id"] = request_id
+        logger.info(
+            "request_completed",
+            extra={
+                "event": "request_completed",
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms
+            }
+        )
+        request_id_ctx.reset(token)
 
 
 def custom_openapi():
@@ -306,7 +339,7 @@ async def root():
     }
 
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(require_auth_if_configured)])
 async def get_stats():
     """
     Get collection statistics for the webapp dashboard.
@@ -347,7 +380,7 @@ async def get_stats():
         )
 
 
-@app.get("/api/papers")
+@app.get("/api/papers", dependencies=[Depends(require_auth_if_configured)])
 async def api_list_papers(
     phase_filter: str = None,
     topic_filter: str = None,
@@ -395,7 +428,7 @@ async def api_list_papers(
         )
 
 
-@app.get("/api/search")
+@app.get("/api/search", dependencies=[Depends(require_auth_if_configured)])
 async def api_semantic_search(
     query: str,
     n_results: int = 10,
@@ -408,6 +441,7 @@ async def api_semantic_search(
     Semantic search endpoint for the webapp.
     """
     check_rag_ready()
+    start_time = time.time()
 
     try:
         filters = {}
@@ -443,6 +477,19 @@ async def api_semantic_search(
                 "relevance_score": round(score, 4)
             })
 
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "search_metrics",
+            extra={
+                "event": "search_metrics",
+                "query": query,
+                "n_results": n_results,
+                "returned": len(search_results),
+                "phase_filter": phase_filter,
+                "topic_filter": topic_filter,
+                "duration_ms": duration_ms
+            }
+        )
         return search_results
     except Exception as e:
         logger.error(f"API search failed: {e}")
@@ -452,7 +499,7 @@ async def api_semantic_search(
         )
 
 
-@app.get("/api/answer")
+@app.get("/api/answer", dependencies=[Depends(require_auth_if_configured)])
 async def api_answer_with_citations(
     question: str,
     n_sources: int = 5,
@@ -515,7 +562,7 @@ async def api_answer_with_citations(
         )
 
 
-@app.get("/api/chat", response_model=AgenticChatResponse)
+@app.get("/api/chat", response_model=AgenticChatResponse, dependencies=[Depends(require_auth_if_configured)])
 async def api_chat_with_llm(
     question: str,
     n_sources: int = 5,
@@ -554,6 +601,7 @@ async def api_chat_with_llm(
         )
 
     try:
+        start_time = time.time()
         filters = {}
         if phase_filter:
             filters["phase_filter"] = phase_filter
@@ -568,6 +616,18 @@ async def api_chat_with_llm(
                 phase_filter=phase_filter,
                 topic_filter=topic_filter,
                 deep_analysis=deep_analysis
+            )
+            duration_ms = int((time.time() - start_time) * 1000)
+            logger.info(
+                "chat_metrics",
+                extra={
+                    "event": "chat_metrics",
+                    "complexity": result.get("complexity"),
+                    "llm_calls": result["pipeline_stats"].get("llm_calls"),
+                    "retrieval_attempts": result["pipeline_stats"].get("retrieval_attempts"),
+                    "duration_ms": duration_ms,
+                    "deep_analysis": deep_analysis
+                }
             )
 
             return AgenticChatResponse(
@@ -660,6 +720,17 @@ Please provide a well-structured answer using author-date citations (e.g., "Acco
         answer = chat_completion.choices[0].message.content
         total_time_ms = int((time.time() - start_time) * 1000)
 
+        logger.info(
+            "chat_metrics",
+            extra={
+                "event": "chat_metrics",
+                "complexity": "medium",
+                "llm_calls": 1,
+                "retrieval_attempts": 1,
+                "duration_ms": total_time_ms,
+                "deep_analysis": deep_analysis
+            }
+        )
         return AgenticChatResponse(
             question=question,
             answer=answer,
@@ -685,7 +756,7 @@ Please provide a well-structured answer using author-date citations (e.g., "Acco
         )
 
 
-@app.get("/api/related")
+@app.get("/api/related", dependencies=[Depends(require_auth_if_configured)])
 async def api_find_related(
     paper_id: str,
     n_results: int = 5
@@ -725,7 +796,7 @@ async def api_find_related(
         )
 
 
-@app.post("/api/synthesis")
+@app.post("/api/synthesis", dependencies=[Depends(require_auth_if_configured)])
 async def api_synthesis_query(request: SynthesisRequest):
     """
     Multi-topic synthesis query for the webapp.
@@ -776,7 +847,7 @@ async def health_check():
         )
 
 
-@app.post("/query", response_model=QueryResponse)
+@app.post("/query", response_model=QueryResponse, dependencies=[Depends(require_auth_if_configured)])
 async def query_literature(request: QueryRequest):
     """
     Query academic literature with filters.
@@ -832,7 +903,7 @@ async def query_literature(request: QueryRequest):
         )
 
 
-@app.post("/context", response_model=ContextResponse)
+@app.post("/context", response_model=ContextResponse, dependencies=[Depends(require_auth_if_configured)])
 async def get_context(request: ContextRequest):
     """
     Get LLM-ready context with citations.
@@ -880,7 +951,7 @@ async def get_context(request: ContextRequest):
         )
 
 
-@app.post("/synthesis", response_model=SynthesisResponse)
+@app.post("/synthesis", response_model=SynthesisResponse, dependencies=[Depends(require_auth_if_configured)])
 async def synthesis_query(request: SynthesisRequest):
     """
     Query multiple topic categories and synthesize results.
@@ -911,7 +982,7 @@ async def synthesis_query(request: SynthesisRequest):
         )
 
 
-@app.post("/related", response_model=RelatedResponse)
+@app.post("/related", response_model=RelatedResponse, dependencies=[Depends(require_auth_if_configured)])
 async def find_related_papers(request: RelatedRequest):
     """
     Find papers related to a given paper via embedding similarity.
@@ -941,7 +1012,7 @@ async def find_related_papers(request: RelatedRequest):
         )
 
 
-@app.get("/papers", response_model=PapersResponse)
+@app.get("/papers", response_model=PapersResponse, dependencies=[Depends(require_auth_if_configured)])
 async def list_papers(
     phase_filter: str = None,
     topic_filter: str = None,
@@ -1017,7 +1088,7 @@ async def list_papers(
         )
 
 
-@app.get("/gaps", response_model=Dict[str, Any])
+@app.get("/gaps", response_model=Dict[str, Any], dependencies=[Depends(require_auth_if_configured)])
 async def analyze_gaps(focus_area: str = None):
     """
     Identify research gaps in the literature.
@@ -1085,6 +1156,24 @@ def check_upload_enabled():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Document indexer not initialized"
         )
+        if getattr(upload_config, 's3_only', False):
+            try:
+                get_storage()
+            except Exception as e:
+                raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"S3 storage is required but not configured: {e}"
+            )
+
+
+def require_auth_if_configured(user=Depends(get_current_user_optional)):
+    """Enforce auth when configured."""
+    if getattr(config.auth, "require_auth", False) and user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    return user
 
 
 def get_phase_names() -> Dict[str, str]:
@@ -1093,7 +1182,7 @@ def get_phase_names() -> Dict[str, str]:
     return {p.get('name', ''): p.get('full_name', '') for p in phases_config}
 
 
-@app.post("/api/upload", response_model=UploadResponse)
+@app.post("/api/upload", response_model=UploadResponse, dependencies=[Depends(require_auth_if_configured)])
 async def upload_pdf(
     file: UploadFile = File(..., description="PDF file to upload"),
     phase: str = Form(..., description="Phase (e.g., 'Phase 1', 'Phase 2')"),
@@ -1164,14 +1253,58 @@ async def upload_pdf(
         )
 
         if result["success"]:
-            # Move to permanent storage
-            storage_path = Path(upload_config.storage_path)
-            phase_topic_dir = storage_path / phase / topic
-            phase_topic_dir.mkdir(parents=True, exist_ok=True)
-
-            permanent_file = phase_topic_dir / file.filename
-            shutil.move(str(temp_file), str(permanent_file))
-            logger.info(f"Moved to permanent storage: {permanent_file}")
+            # Upload to S3 (single storage backend)
+            storage = get_storage()
+            try:
+                with open(temp_file, "rb") as f:
+                    storage_key = storage.upload_pdf(
+                        job_id="default",
+                        phase=phase,
+                        topic=topic,
+                        filename=file.filename,
+                        file_content=f
+                    )
+                if temp_file.exists():
+                    temp_file.unlink()
+                logger.info("Uploaded to S3 and removed temp file")
+                # Persist default document record
+                db = get_db_session()
+                try:
+                    metadata = result.get("metadata") or {}
+                    authors_value = metadata.get("authors")
+                    if isinstance(authors_value, list):
+                        authors_value = ", ".join(authors_value)
+                    DefaultDocumentCRUD.create(
+                        db=db,
+                        doc_id=result["doc_id"],
+                        filename=file.filename,
+                        storage_key=storage_key,
+                        file_size=len(contents),
+                        title=metadata.get("title"),
+                        authors=authors_value,
+                        year=metadata.get("year"),
+                        phase=phase,
+                        topic_category=topic,
+                        doi=metadata.get("doi"),
+                        total_pages=metadata.get("total_pages")
+                    )
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"S3 upload failed: {e}")
+                # Roll back indexed chunks if storage fails
+                if result.get("doc_id"):
+                    rag_system.delete_by_doc_id(result["doc_id"])
+                if temp_file.exists():
+                    temp_file.unlink()
+                return UploadResponse(
+                    success=False,
+                    doc_id=result.get("doc_id"),
+                    filename=file.filename,
+                    chunks_indexed=0,
+                    metadata=None,
+                    error="Upload failed while storing file in S3"
+                )
 
             return UploadResponse(
                 success=True,
@@ -1207,7 +1340,7 @@ async def upload_pdf(
         )
 
 
-@app.post("/api/upload/async")
+@app.post("/api/upload/async", dependencies=[Depends(require_auth_if_configured)])
 async def upload_pdf_async(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to upload"),
@@ -1275,8 +1408,6 @@ async def upload_pdf_async(
         phase_name = phase_names.get(phase, phase)
 
         # Schedule background processing
-        storage_path = Path(upload_config.storage_path)
-
         background_tasks.add_task(
             run_async_task,
             process_pdf_task(
@@ -1286,8 +1417,9 @@ async def upload_pdf_async(
                 phase=phase,
                 phase_name=phase_name,
                 topic=topic,
-                storage_path=storage_path,
-                filename=file.filename
+                storage_path=None,
+                filename=file.filename,
+                owner_id="default"
             )
         )
 
@@ -1345,7 +1477,7 @@ async def list_upload_tasks(limit: int = 20):
     }
 
 
-@app.get("/api/documents", response_model=DocumentListResponse)
+@app.get("/api/documents", response_model=DocumentListResponse, dependencies=[Depends(require_auth_if_configured)])
 async def list_documents(
     phase_filter: str = None,
     topic_filter: str = None,
@@ -1359,8 +1491,29 @@ async def list_documents(
     check_rag_ready()
 
     try:
-        # Use the RAG system's list_documents method
-        all_docs = rag_system.list_documents()
+        # Prefer normalized document records from DB
+        db = get_db_session()
+        try:
+            db_docs = DefaultDocumentCRUD.list_all(db, limit=limit)
+        finally:
+            db.close()
+
+        if db_docs:
+            all_docs = [{
+                "doc_id": d.doc_id,
+                "title": d.title,
+                "authors": d.authors,
+                "year": d.year,
+                "phase": d.phase,
+                "topic_category": d.topic_category,
+                "filename": d.filename,
+                "total_pages": d.total_pages,
+                "doi": d.doi,
+                "abstract": None
+            } for d in db_docs]
+        else:
+            # Fallback to RAG metadata if DB has no records yet
+            all_docs = rag_system.list_documents()
 
         # Apply filters
         filtered_docs = []
@@ -1399,7 +1552,30 @@ async def list_documents(
         )
 
 
-@app.delete("/api/documents/{doc_id}", response_model=DeleteResponse)
+@app.get("/api/documents/{doc_id}/download")
+async def get_document_download_url(
+    doc_id: str,
+    _user=Depends(require_auth_if_configured)
+):
+    """
+    Get a presigned URL to download a default collection document.
+    """
+    db = get_db_session()
+    try:
+        default_doc = DefaultDocumentCRUD.get_by_doc_id(db, doc_id)
+        if not default_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        storage = get_storage()
+        url = storage.get_presigned_url(default_doc.storage_key)
+        return {"doc_id": doc_id, "download_url": url}
+    finally:
+        db.close()
+
+
+@app.delete("/api/documents/{doc_id}", response_model=DeleteResponse, dependencies=[Depends(require_auth_if_configured)])
 async def delete_document(doc_id: str):
     """
     Delete a document and all its chunks from the knowledge base.
@@ -1411,6 +1587,19 @@ async def delete_document(doc_id: str):
 
     try:
         result = rag_system.delete_by_doc_id(doc_id)
+        # Remove default document record + S3 object if present
+        db = get_db_session()
+        try:
+            default_doc = DefaultDocumentCRUD.get_by_doc_id(db, doc_id)
+            if default_doc:
+                try:
+                    storage = get_storage()
+                    storage.delete_pdf(default_doc.storage_key)
+                except Exception as e:
+                    logger.warning(f"Failed to delete S3 object: {e}")
+                DefaultDocumentCRUD.delete(db, default_doc)
+        finally:
+            db.close()
 
         return DeleteResponse(
             success=result["success"],
@@ -1427,7 +1616,7 @@ async def delete_document(doc_id: str):
         )
 
 
-@app.get("/api/upload/config")
+@app.get("/api/upload/config", dependencies=[Depends(require_auth_if_configured)])
 async def get_upload_config():
     """
     Get upload configuration and available options.
@@ -1460,6 +1649,7 @@ async def get_upload_config():
 
     return {
         "enabled": upload_config is not None and getattr(upload_config, 'enabled', False),
+        "s3_only": getattr(upload_config, 's3_only', False) if upload_config else False,
         "max_file_size": getattr(upload_config, 'max_file_size', 52428800) if upload_config else 52428800,
         "allowed_extensions": getattr(upload_config, 'allowed_extensions', ['.pdf']) if upload_config else ['.pdf'],
         "phases": phases,

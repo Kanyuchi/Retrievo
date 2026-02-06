@@ -106,6 +106,7 @@ class Job(Base):
     # Job info
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    term_maps = Column(Text, nullable=True)  # JSON string for per-job term maps
 
     # ChromaDB collection name (unique per job)
     collection_name = Column(String(255), unique=True, nullable=False)
@@ -153,6 +154,7 @@ class Document(Base):
     year = Column(Integer, nullable=True)
     phase = Column(String(100), nullable=True)
     topic_category = Column(String(255), nullable=True)
+    doi = Column(String(255), nullable=True)
 
     # Storage
     storage_key = Column(String(500), nullable=True)  # S3 key or local path
@@ -173,6 +175,30 @@ class Document(Base):
 
     def __repr__(self):
         return f"<Document(id={self.id}, filename={self.filename})>"
+
+
+class DefaultDocument(Base):
+    """Default collection document record."""
+    __tablename__ = "default_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doc_id = Column(String(255), unique=True, index=True, nullable=False)
+    filename = Column(String(500), nullable=False)
+    storage_key = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+
+    title = Column(String(500), nullable=True)
+    authors = Column(String(1000), nullable=True)
+    year = Column(Integer, nullable=True)
+    phase = Column(String(100), nullable=True)
+    topic_category = Column(String(255), nullable=True)
+    total_pages = Column(Integer, nullable=True)
+    doi = Column(String(255), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<DefaultDocument(id={self.id}, doc_id={self.doc_id})>"
 
 
 class RefreshToken(Base):
@@ -198,6 +224,30 @@ class RefreshToken(Base):
 
     def __repr__(self):
         return f"<RefreshToken(id={self.id}, user_id={self.user_id})>"
+
+
+class UploadTaskRecord(Base):
+    """Async upload task record."""
+    __tablename__ = "upload_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String(50), unique=True, index=True, nullable=False)
+    filename = Column(String(500), nullable=False)
+    phase = Column(String(100), nullable=False)
+    topic = Column(String(255), nullable=False)
+    status = Column(String(50), nullable=False)
+    progress = Column(Integer, default=0)
+    message = Column(Text, nullable=True)
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    temp_file_path = Column(String(1000), nullable=True)
+    storage_file_path = Column(String(1000), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<UploadTaskRecord(task_id={self.task_id}, status={self.status})>"
 
 
 # ============================================================================
@@ -229,6 +279,27 @@ def _run_migrations():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE documents ADD COLUMN total_pages INTEGER"))
             logger.info("Migration complete: total_pages added")
+        if "doi" not in columns:
+            logger.info("Migrating: adding doi column to documents table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE documents ADD COLUMN doi VARCHAR(255)"))
+            logger.info("Migration complete: doi added")
+
+    if inspector.has_table("jobs"):
+        columns = [col["name"] for col in inspector.get_columns("jobs")]
+        if "term_maps" not in columns:
+            logger.info("Migrating: adding term_maps column to jobs table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN term_maps TEXT"))
+            logger.info("Migration complete: term_maps added")
+
+    if inspector.has_table("default_documents"):
+        columns = [col["name"] for col in inspector.get_columns("default_documents")]
+        if "doi" not in columns:
+            logger.info("Migrating: adding doi column to default_documents table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE default_documents ADD COLUMN doi VARCHAR(255)"))
+            logger.info("Migration complete: doi added")
 
 
 def get_db() -> Session:
@@ -396,6 +467,70 @@ class DocumentCRUD:
         """Delete a document record."""
         db.delete(document)
         db.commit()
+
+
+class DefaultDocumentCRUD:
+    """CRUD operations for DefaultDocument model."""
+
+    @staticmethod
+    def create(db: Session, doc_id: str, filename: str, storage_key: str,
+               file_size: Optional[int] = None, **metadata) -> DefaultDocument:
+        """Create a new default document record."""
+        document = DefaultDocument(
+            doc_id=doc_id,
+            filename=filename,
+            storage_key=storage_key,
+            file_size=file_size,
+            **metadata
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document
+
+    @staticmethod
+    def get_by_doc_id(db: Session, doc_id: str) -> Optional[DefaultDocument]:
+        """Get default document by doc_id."""
+        return db.query(DefaultDocument).filter(DefaultDocument.doc_id == doc_id).first()
+
+    @staticmethod
+    def list_all(db: Session, limit: int = 100) -> List[DefaultDocument]:
+        """List default documents."""
+        return db.query(DefaultDocument).order_by(DefaultDocument.created_at.desc()).limit(limit).all()
+
+    @staticmethod
+    def delete(db: Session, document: DefaultDocument):
+        """Delete a default document record."""
+        db.delete(document)
+        db.commit()
+
+
+class UploadTaskCRUD:
+    """CRUD operations for UploadTaskRecord model."""
+
+    @staticmethod
+    def create(db: Session, **fields) -> UploadTaskRecord:
+        record = UploadTaskRecord(**fields)
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+
+    @staticmethod
+    def get_by_task_id(db: Session, task_id: str) -> Optional[UploadTaskRecord]:
+        return db.query(UploadTaskRecord).filter(UploadTaskRecord.task_id == task_id).first()
+
+    @staticmethod
+    def update(db: Session, record: UploadTaskRecord, **fields) -> UploadTaskRecord:
+        for key, value in fields.items():
+            setattr(record, key, value)
+        db.commit()
+        db.refresh(record)
+        return record
+
+    @staticmethod
+    def list_recent(db: Session, limit: int = 20) -> List[UploadTaskRecord]:
+        return db.query(UploadTaskRecord).order_by(UploadTaskRecord.created_at.desc()).limit(limit).all()
 
 
 class RefreshTokenCRUD:

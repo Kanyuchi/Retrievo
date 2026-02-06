@@ -1,19 +1,18 @@
 """Background Task Management for Literature RAG
 
 Provides task tracking and async processing for PDF uploads.
-Uses in-memory storage (can be upgraded to Redis for production).
+Uses database-backed storage for durability across restarts.
 """
 
 import logging
 import uuid
 import asyncio
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
-from threading import Lock
-import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -66,21 +65,10 @@ class UploadTask:
 
 class TaskStore:
     """
-    In-memory task store for tracking upload jobs.
-
-    Thread-safe implementation for use with FastAPI BackgroundTasks.
-    For production with multiple workers, replace with Redis.
+    Database-backed task store for tracking upload jobs.
     """
 
     def __init__(self, max_tasks: int = 100):
-        """
-        Initialize task store.
-
-        Args:
-            max_tasks: Maximum tasks to keep in memory (oldest are evicted)
-        """
-        self._tasks: Dict[str, UploadTask] = {}
-        self._lock = Lock()
         self._max_tasks = max_tasks
 
     def create_task(
@@ -112,20 +100,35 @@ class TaskStore:
             temp_file_path=temp_file_path
         )
 
-        with self._lock:
-            # Evict old tasks if needed
-            if len(self._tasks) >= self._max_tasks:
-                self._evict_oldest()
-
-            self._tasks[task_id] = task
+        from .database import get_db_session, UploadTaskCRUD
+        db = get_db_session()
+        try:
+            UploadTaskCRUD.create(
+                db=db,
+                task_id=task.task_id,
+                filename=task.filename,
+                phase=task.phase,
+                topic=task.topic,
+                status=task.status.value,
+                progress=task.progress,
+                message=task.message,
+                temp_file_path=task.temp_file_path
+            )
+        finally:
+            db.close()
 
         logger.info(f"Created upload task {task_id} for {filename}")
         return task
 
     def get_task(self, task_id: str) -> Optional[UploadTask]:
         """Get task by ID."""
-        with self._lock:
-            return self._tasks.get(task_id)
+        from .database import get_db_session, UploadTaskCRUD
+        db = get_db_session()
+        try:
+            record = UploadTaskCRUD.get_by_task_id(db, task_id)
+            return self._record_to_task(record) if record else None
+        finally:
+            db.close()
 
     def update_task(
         self,
@@ -150,66 +153,73 @@ class TaskStore:
         Returns:
             Updated task or None if not found
         """
-        with self._lock:
-            task = self._tasks.get(task_id)
-            if not task:
+        from .database import get_db_session, UploadTaskCRUD
+        db = get_db_session()
+        try:
+            record = UploadTaskCRUD.get_by_task_id(db, task_id)
+            if not record:
                 return None
 
+            updates: Dict[str, Any] = {}
             if status:
-                task.status = status
-                if status == TaskStatus.PROCESSING and not task.started_at:
-                    task.started_at = datetime.now()
+                updates["status"] = status.value
+                if status == TaskStatus.PROCESSING and record.started_at is None:
+                    updates["started_at"] = datetime.now()
                 elif status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
-                    task.completed_at = datetime.now()
+                    updates["completed_at"] = datetime.now()
 
             if progress is not None:
-                task.progress = min(100, max(0, progress))
+                updates["progress"] = min(100, max(0, progress))
 
             if message:
-                task.message = message
+                updates["message"] = message
 
             if result:
-                task.result = result
+                updates["result_json"] = json.dumps(result)
 
             if error:
-                task.error = error
+                updates["error"] = error
 
-            return task
+            record = UploadTaskCRUD.update(db, record, **updates)
+            return self._record_to_task(record)
+        finally:
+            db.close()
 
     def list_tasks(self, limit: int = 20) -> list[UploadTask]:
         """List recent tasks."""
-        with self._lock:
-            tasks = sorted(
-                self._tasks.values(),
-                key=lambda t: t.created_at,
-                reverse=True
-            )
-            return tasks[:limit]
+        from .database import get_db_session, UploadTaskCRUD
+        db = get_db_session()
+        try:
+            records = UploadTaskCRUD.list_recent(db, limit=limit)
+            return [self._record_to_task(r) for r in records]
+        finally:
+            db.close()
 
-    def _evict_oldest(self):
-        """Remove oldest completed/failed tasks."""
-        # First try to remove completed/failed tasks
-        completed = [
-            (k, v) for k, v in self._tasks.items()
-            if v.status in (TaskStatus.COMPLETED, TaskStatus.FAILED)
-        ]
+    def _record_to_task(self, record) -> UploadTask:
+        """Convert DB record to UploadTask."""
+        result = None
+        if record.result_json:
+            try:
+                result = json.loads(record.result_json)
+            except Exception:
+                result = None
 
-        if completed:
-            # Sort by completion time, remove oldest
-            completed.sort(key=lambda x: x[1].completed_at or x[1].created_at)
-            oldest_id = completed[0][0]
-            del self._tasks[oldest_id]
-            logger.debug(f"Evicted completed task {oldest_id}")
-        else:
-            # No completed tasks, remove oldest pending
-            pending = sorted(
-                self._tasks.items(),
-                key=lambda x: x[1].created_at
-            )
-            if pending:
-                oldest_id = pending[0][0]
-                del self._tasks[oldest_id]
-                logger.debug(f"Evicted oldest task {oldest_id}")
+        return UploadTask(
+            task_id=record.task_id,
+            filename=record.filename,
+            phase=record.phase,
+            topic=record.topic,
+            status=TaskStatus(record.status),
+            progress=record.progress or 0,
+            message=record.message or "",
+            created_at=record.created_at,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            result=result,
+            error=record.error,
+            temp_file_path=record.temp_file_path,
+            storage_file_path=record.storage_file_path
+        )
 
 
 # Global task store instance
@@ -223,8 +233,9 @@ async def process_pdf_task(
     phase: str,
     phase_name: str,
     topic: str,
-    storage_path: Path,
-    filename: str
+    storage_path: Optional[Path],
+    filename: str,
+    owner_id: Optional[str] = "default"
 ):
     """
     Background task to process and index a PDF.
@@ -276,18 +287,59 @@ async def process_pdf_task(
         await asyncio.sleep(0.1)
 
         if result["success"]:
-            # Move to permanent storage
+            # Upload to S3 (single storage backend)
             task_store.update_task(
                 task_id,
                 progress=90,
-                message="Moving to permanent storage..."
+                message="Uploading to S3..."
             )
 
-            phase_topic_dir = storage_path / phase / topic
-            phase_topic_dir.mkdir(parents=True, exist_ok=True)
+from .storage import get_storage
+from .database import get_db_session, DefaultDocumentCRUD
+            storage = get_storage()
+            try:
+                with open(temp_file_path, "rb") as f:
+                    storage_key = storage.upload_pdf(
+                        job_id=owner_id,
+                        phase=phase,
+                        topic=topic,
+                        filename=filename,
+                        file_content=f
+                    )
+            except Exception as e:
+                # Roll back indexed chunks if storage fails
+                if result.get("doc_id") and hasattr(indexer, "collection") and indexer.collection:
+                    existing = indexer.collection.get(where={"doc_id": result["doc_id"]}, include=[])
+                    if existing and existing.get("ids"):
+                        indexer.collection.delete(ids=existing["ids"])
+                raise e
 
-            permanent_file = phase_topic_dir / filename
-            shutil.move(str(temp_file_path), str(permanent_file))
+            if temp_file_path.exists():
+                temp_file_path.unlink()
+
+            if str(owner_id).lower() == "default":
+                db = get_db_session()
+                try:
+                    metadata = result.get("metadata") or {}
+                    authors_value = metadata.get("authors")
+                    if isinstance(authors_value, list):
+                        authors_value = ", ".join(authors_value)
+                    DefaultDocumentCRUD.create(
+                        db=db,
+                        doc_id=result["doc_id"],
+                        filename=filename,
+                        storage_key=storage_key,
+                        file_size=None,
+                        title=metadata.get("title"),
+                        authors=authors_value,
+                        year=metadata.get("year"),
+                        phase=phase,
+                        topic_category=topic,
+                        doi=metadata.get("doi"),
+                        total_pages=metadata.get("total_pages")
+                    )
+                finally:
+                    db.close()
 
             # Mark as completed
             task_store.update_task(
@@ -299,7 +351,8 @@ async def process_pdf_task(
                     "doc_id": result["doc_id"],
                     "filename": filename,
                     "chunks_indexed": result["chunks_indexed"],
-                    "metadata": result["metadata"]
+                    "metadata": result["metadata"],
+                    "storage_key": storage_key
                 }
             )
 

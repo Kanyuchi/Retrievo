@@ -123,7 +123,9 @@ retrieval:
 
   # Search strategy (keep it simple like improved personality RAG)
   use_hybrid: false       # Start simple: vector-only search
-  use_reranking: false    # Can add later if needed
+  use_reranking: true     # Enable cross-encoder reranking for higher quality
+  reranker_model: "BAAI/bge-reranker-base"
+  rerank_top_k: 20        # Retrieve top K candidates before reranking
 
   # Query expansion (academic term normalization)
   expand_queries: true
@@ -137,8 +139,8 @@ retrieval:
 # ----------------------------------------------------------------------------
 # This is the "secret sauce" - explicit term normalization like MBTI codes
 normalization:
-  # Enable academic term normalization
-  enable: true
+  # Enable academic term normalization (set true per-tenant if desired)
+  enable: false
 
   # Custom term mappings (add your domain-specific terms here)
   term_maps:
@@ -152,8 +154,9 @@ normalization:
     economic:
       - ["deindustrialization", "structural change", "industrial decline", "post-industrial transition"]
       - ["tertiarization", "service sector growth", "shift to services", "service economy"]
-      - ["business formation", "entrepreneurship", "startup creation", "new ventures", "firm creation"]
+      - ["business formation", "entrepreneurship", "startup creation", "new ventures", "firm creation", "business creation", "firm births", "new firm entry"]
       - ["economic resilience", "regional resilience", "adaptive capacity"]
+      - ["post-industrial transition", "industrial restructuring", "economic restructuring", "regional transition"]
 
     # Institutional concepts
     institutional:
@@ -174,6 +177,9 @@ normalization:
       - ["just transition", "fair transition", "equitable transition", "social transition"]
       - ["regional policy", "regional development policy", "structural policy"]
       - ["eu funds", "european funds", "structural funds", "cohesion policy"]
+
+    governance:
+      - ["municipal strategy", "city strategy", "local development plan", "master plan", "urban strategy", "strategic plan", "municipal strategy documents"]
 
 # ----------------------------------------------------------------------------
 # FILTERS
@@ -280,6 +286,8 @@ auth:
 upload:
   # Enable PDF upload functionality
   enabled: true
+  # Require S3 storage for all uploads
+  s3_only: true
 
   # Maximum file size in bytes (50 MB default)
   max_file_size: 52428800

@@ -129,6 +129,8 @@ class RetrievalConfig:
     default_n_results: int = 5
     use_hybrid: bool = False
     use_reranking: bool = False
+    reranker_model: str = "BAAI/bge-reranker-base"
+    rerank_top_k: int = 20
     expand_queries: bool = True
     max_expansions: int = 2
     distance_metric: str = "cosine"
@@ -209,6 +211,7 @@ class LLMConfig:
 class UploadConfig:
     """Upload configuration."""
     enabled: bool = True
+    s3_only: bool = False
     max_file_size: int = 52428800  # 50MB default
     temp_path: str = "./uploads/temp"
     storage_path: str = "./uploads/pdfs"
@@ -407,6 +410,8 @@ def _load_retrieval_config(yaml_retrieval: dict) -> RetrievalConfig:
         default_n_results=yaml_retrieval.get("default_n_results", 5),
         use_hybrid=yaml_retrieval.get("use_hybrid", False),
         use_reranking=yaml_retrieval.get("use_reranking", False),
+        reranker_model=yaml_retrieval.get("reranker_model", "BAAI/bge-reranker-base"),
+        rerank_top_k=yaml_retrieval.get("rerank_top_k", 20),
         expand_queries=yaml_retrieval.get("expand_queries", True),
         max_expansions=yaml_retrieval.get("max_expansions", 2),
         distance_metric=yaml_retrieval.get("distance_metric", "cosine")
@@ -514,6 +519,7 @@ def _load_upload_config(yaml_upload: dict) -> UploadConfig:
     """Load upload configuration."""
     return UploadConfig(
         enabled=yaml_upload.get("enabled", True),
+        s3_only=yaml_upload.get("s3_only", False),
         max_file_size=yaml_upload.get("max_file_size", 52428800),
         temp_path=yaml_upload.get("temp_path", "./uploads/temp"),
         storage_path=yaml_upload.get("storage_path", "./uploads/pdfs"),

@@ -4,10 +4,8 @@ Provides endpoints for managing knowledge base jobs.
 Each job represents an isolated knowledge base with its own ChromaDB collection.
 """
 
-import os
-import io
 import logging
-from typing import Optional, List
+from typing import Optional
 from pathlib import Path
 
 import chromadb
@@ -23,19 +21,18 @@ from ..models import (
     JobCreateRequest, JobResponse, JobListResponse
 )
 from ..config import load_config
+from ..storage import get_storage
+from ..indexer import DocumentIndexer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
-# Check if S3 is configured
-S3_ENABLED = bool(os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_SECRET_ACCESS_KEY'))
-
 # Load config
 config = load_config()
 
 
-def get_job_collection(job: Job) -> chromadb.Collection:
+def get_job_collection(job: Job) -> tuple[chromadb.ClientAPI, chromadb.Collection]:
     """Get or create ChromaDB collection for a job."""
     client = chromadb.PersistentClient(path=config.storage.indices_path)
 
@@ -47,15 +44,61 @@ def get_job_collection(job: Job) -> chromadb.Collection:
             metadata={"job_id": job.id, "job_name": job.name}
         )
 
-    return collection
+    return client, collection
+
+
+def require_s3_storage() -> None:
+    """Ensure S3 storage is available when required."""
+    if getattr(config.upload, "s3_only", False):
+        try:
+            get_storage()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"S3 storage is required but not configured: {e}"
+            )
+
+
+def build_job_indexer(client: chromadb.ClientAPI, collection: chromadb.Collection) -> DocumentIndexer:
+    """Create a DocumentIndexer for a job collection using shared config."""
+    from langchain_huggingface import HuggingFaceEmbeddings
+    import torch
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    embeddings = HuggingFaceEmbeddings(
+        model_name=config.embedding.model,
+        model_kwargs={"device": device},
+        encode_kwargs={"normalize_embeddings": True}
+    )
+
+    indexer_config = {
+        "extraction": vars(config.extraction) if hasattr(config.extraction, "__dict__") else {},
+        "chunking": vars(config.chunking) if hasattr(config.chunking, "__dict__") else {},
+        "embedding": vars(config.embedding) if hasattr(config.embedding, "__dict__") else {}
+    }
+
+    return DocumentIndexer(
+        chroma_client=client,
+        collection=collection,
+        embeddings=embeddings,
+        config=indexer_config
+    )
 
 
 def job_to_response(job: Job) -> JobResponse:
     """Convert Job model to JobResponse."""
+    term_maps_value = None
+    if job.term_maps:
+        import json
+        try:
+            term_maps_value = json.loads(job.term_maps)
+        except Exception:
+            term_maps_value = None
     return JobResponse(
         id=job.id,
         name=job.name,
         description=job.description,
+        term_maps=term_maps_value,
         collection_name=job.collection_name,
         status=job.status,
         document_count=job.document_count,
@@ -87,6 +130,11 @@ async def create_job(
         name=request.name,
         description=request.description
     )
+
+    if request.term_maps:
+        import json
+        job.term_maps = json.dumps(request.term_maps)
+        db.commit()
 
     # Create ChromaDB collection
     try:
@@ -149,6 +197,39 @@ async def get_job(
     return job_to_response(job)
 
 
+@router.get("/{job_id}/term-maps")
+async def get_job_term_maps(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get term normalization maps for a job.
+    """
+    job = JobCRUD.get_by_id(db, job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    if not job.term_maps:
+        return {"term_maps": {}}
+
+    import json
+    try:
+        return {"term_maps": json.loads(job.term_maps)}
+    except Exception:
+        return {"term_maps": {}}
+
+
 @router.patch("/{job_id}", response_model=JobResponse)
 async def update_job(
     job_id: int,
@@ -178,10 +259,40 @@ async def update_job(
         job.name = name
     if description is not None:
         job.description = description
-
     db.commit()
     db.refresh(job)
 
+    return job_to_response(job)
+
+
+@router.patch("/{job_id}/term-maps", response_model=JobResponse)
+async def update_job_term_maps(
+    job_id: int,
+    term_maps: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update term normalization maps for a job.
+    """
+    job = JobCRUD.get_by_id(db, job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    import json
+    job.term_maps = json.dumps(term_maps)
+    db.commit()
+    db.refresh(job)
     return job_to_response(job)
 
 
@@ -243,7 +354,7 @@ async def get_job_stats(
 
     # Get collection stats
     try:
-        collection = get_job_collection(job)
+        _, collection = get_job_collection(job)
         chunk_count = collection.count()
     except Exception:
         chunk_count = 0
@@ -315,6 +426,7 @@ async def list_job_documents(
                 "year": doc.year,
                 "phase": doc.phase,
                 "topic_category": doc.topic_category,
+                "doi": doc.doi,
                 "status": doc.status,
                 "chunk_count": doc.chunk_count,
                 "total_pages": doc.total_pages,
@@ -323,6 +435,48 @@ async def list_job_documents(
             for doc in documents
         ]
     }
+
+
+@router.get("/{job_id}/documents/{doc_id}/download")
+async def get_job_document_download_url(
+    job_id: int,
+    doc_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a presigned URL to download a job document.
+    """
+    job = JobCRUD.get_by_id(db, job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if not document.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document storage key not available"
+        )
+
+    storage = get_storage()
+    url = storage.get_presigned_url(document.storage_key)
+    return {"doc_id": doc_id, "download_url": url}
 
 
 @router.get("/{job_id}/query")
@@ -359,7 +513,7 @@ async def query_job(
 
     try:
         # Get collection
-        collection = get_job_collection(job)
+        _, collection = get_job_collection(job)
 
         if collection.count() == 0:
             return {
@@ -498,7 +652,7 @@ async def chat_with_job(
 
     try:
         # Get collection
-        collection = get_job_collection(job)
+        _, collection = get_job_collection(job)
 
         if collection.count() == 0:
             return {
@@ -519,7 +673,14 @@ async def chat_with_job(
             }
 
         # Create RAG wrapper for the job collection
-        job_rag = JobCollectionRAG(collection)
+        term_maps = None
+        if job.term_maps:
+            try:
+                import json
+                term_maps = json.loads(job.term_maps)
+            except Exception:
+                term_maps = None
+        job_rag = JobCollectionRAG(collection, term_maps=term_maps)
 
         # Initialize Groq client
         groq_client = Groq(api_key=groq_api_key)
@@ -601,13 +762,7 @@ async def upload_to_job(
     Upload and index a PDF to a specific job's knowledge base.
     """
     import uuid
-    import shutil
     from pathlib import Path
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    import torch
-
-    from ..pdf_extractor import AcademicPDFExtractor, extract_keywords_from_text
 
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -623,6 +778,8 @@ async def upload_to_job(
             detail="Access denied"
         )
 
+    require_s3_storage()
+
     # Validate file
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(
@@ -630,12 +787,13 @@ async def upload_to_job(
             detail="Only PDF files are allowed"
         )
 
-    # Check file size (50MB limit)
+    # Check file size
     contents = await file.read()
-    if len(contents) > 52428800:
+    max_size = getattr(config.upload, "max_file_size", 52428800)
+    if len(contents) > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File too large. Maximum size: 50MB"
+            detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB"
         )
 
     # Save to temp file
@@ -650,176 +808,102 @@ async def upload_to_job(
 
         logger.info(f"Processing upload for job {job_id}: {file.filename}")
 
-        # Extract PDF content
-        extractor = AcademicPDFExtractor()
-
         # Get phase name from config
         phases_config = config.data.phases if hasattr(config.data, 'phases') else []
         phase_names = {p.get('name', ''): p.get('full_name', '') for p in phases_config}
         phase_name = phase_names.get(phase, phase)
 
-        sections, metadata = extractor.extract_pdf(
-            temp_file,
-            phase_info={
-                "phase": phase,
-                "phase_name": phase_name,
-                "topic_category": topic
-            }
+        # Get job collection + indexer
+        client, collection = get_job_collection(job)
+        indexer = build_job_indexer(client, collection)
+
+        # Index PDF using shared pipeline (section-aware, normalization, etc.)
+        result = indexer.index_pdf(
+            pdf_path=temp_file,
+            phase=phase,
+            phase_name=phase_name,
+            topic_category=topic
         )
 
-        # Extract full text for chunking
-        full_text = extractor.extract_full_text(temp_file)
-
-        if not full_text:
+        if not result["success"]:
+            if temp_file.exists():
+                temp_file.unlink()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Could not extract text from PDF"
+                detail=result.get("error", "Failed to index document")
             )
 
-        # Create chunks
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1024,
-            chunk_overlap=100,
-            separators=["\n\n", "\n", ". ", " ", ""]
-        )
-        chunks = splitter.split_text(full_text)
-
-        # Prepare metadata for chunks
-        doc_id = metadata.doc_id
-
-        # Extract keywords
-        keywords = []
-        if metadata.abstract:
-            keywords = extract_keywords_from_text(metadata.abstract)
-        elif metadata.title:
-            keywords = extract_keywords_from_text(metadata.title)
-
-        base_metadata = {
-            "doc_id": doc_id,
-            "title": metadata.title or "",
-            "authors": ", ".join(metadata.authors) if metadata.authors else "",
-            "year": metadata.year or 0,
-            "doi": metadata.doi or "",
-            "phase": phase,
-            "phase_name": phase_name,
-            "topic_category": topic,
-            "filename": file.filename,
-            "keywords": ", ".join(keywords) if keywords else "",
-            "total_pages": metadata.total_pages or 0
-        }
-
-        # Initialize embeddings
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        embeddings = HuggingFaceEmbeddings(
-            model_name=config.embedding.model,
-            model_kwargs={"device": device},
-            encode_kwargs={"normalize_embeddings": True}
-        )
-
-        # Get job collection
-        collection = get_job_collection(job)
-
-        # Prepare chunk data
-        chunk_texts = []
-        chunk_metadatas = []
-        chunk_ids = []
-
-        for i, chunk_text in enumerate(chunks):
-            chunk_meta = base_metadata.copy()
-            chunk_meta["chunk_index"] = i
-            chunk_metadatas.append(chunk_meta)
-            chunk_texts.append(chunk_text)
-            chunk_ids.append(f"{doc_id}_chunk_{i}")
-
-        # Embed and add to collection
-        chunk_embeddings = embeddings.embed_documents(chunk_texts)
-
-        collection.add(
-            ids=chunk_ids,
-            embeddings=chunk_embeddings,
-            documents=chunk_texts,
-            metadatas=chunk_metadatas
-        )
-
-        # Store file (S3 or local) - do this before creating document record
-        storage_key = None
-        if S3_ENABLED:
-            try:
-                from ..storage import get_storage
-                storage = get_storage()
-
-                # Upload to S3
-                with open(temp_file, 'rb') as f:
-                    storage_key = storage.upload_pdf(
-                        job_id=job_id,
-                        phase=phase,
-                        topic=topic,
-                        filename=file.filename,
-                        file_content=f
-                    )
-
-                # Remove temp file after S3 upload
+        # Upload to S3 (single storage backend)
+        storage = get_storage()
+        try:
+            with open(temp_file, "rb") as f:
+                storage_key = storage.upload_pdf(
+                    job_id=job_id,
+                    phase=phase,
+                    topic=topic,
+                    filename=file.filename,
+                    file_content=f
+                )
+        except Exception as e:
+            # Roll back chunks if storage fails
+            if result.get("doc_id"):
+                existing = collection.get(where={"doc_id": result["doc_id"]}, include=[])
+                if existing and existing.get("ids"):
+                    collection.delete(ids=existing["ids"])
+            if temp_file.exists():
                 temp_file.unlink()
-                logger.info(f"Uploaded PDF to S3: {storage_key}")
-            except Exception as e:
-                logger.warning(f"S3 upload failed, falling back to local: {e}")
-                # Fall back to local storage
-                storage_dir = Path(config.upload.storage_path) / job.collection_name
-                storage_dir.mkdir(parents=True, exist_ok=True)
-                permanent_file = storage_dir / f"{upload_id}_{file.filename}"
-                shutil.move(str(temp_file), str(permanent_file))
-                storage_key = str(permanent_file)
-        else:
-            # Local storage
-            storage_dir = Path(config.upload.storage_path) / job.collection_name
-            storage_dir.mkdir(parents=True, exist_ok=True)
-            permanent_file = storage_dir / f"{upload_id}_{file.filename}"
-            shutil.move(str(temp_file), str(permanent_file))
-            storage_key = str(permanent_file)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"S3 upload failed: {e}"
+            )
+
+        if temp_file.exists():
+            temp_file.unlink()
 
         # Create document record in database
+        authors_value = None
+        if result.get("metadata"):
+            authors_value = result["metadata"].get("authors")
+            if isinstance(authors_value, list):
+                authors_value = ", ".join(authors_value)
+
         document = DocumentCRUD.create(
             db=db,
             job_id=job_id,
-            doc_id=doc_id,
+            doc_id=result["doc_id"],
             filename=f"{upload_id}_{file.filename}",
             original_filename=file.filename,
-            title=metadata.title,
-            authors=", ".join(metadata.authors) if metadata.authors else None,
-            year=metadata.year,
+            title=result["metadata"].get("title") if result.get("metadata") else None,
+            authors=authors_value,
+            year=result["metadata"].get("year") if result.get("metadata") else None,
             phase=phase,
             topic_category=topic,
+            doi=result["metadata"].get("doi") if result.get("metadata") else None,
             file_size=len(contents),
             storage_key=storage_key,
-            total_pages=metadata.total_pages
+            total_pages=result["metadata"].get("total_pages") if result.get("metadata") else None
         )
 
         # Update document status
         DocumentCRUD.update_status(
             db, document,
             status=DocumentStatus.INDEXED.value,
-            chunk_count=len(chunks)
+            chunk_count=result["chunks_indexed"]
         )
 
         # Update job stats
         job.document_count += 1
-        job.chunk_count += len(chunks)
+        job.chunk_count += result["chunks_indexed"]
         db.commit()
 
-        logger.info(f"Successfully indexed {len(chunks)} chunks for job {job_id}")
+        logger.info(f"Successfully indexed {result['chunks_indexed']} chunks for job {job_id}")
 
         return {
             "success": True,
-            "doc_id": doc_id,
+            "doc_id": result["doc_id"],
             "filename": file.filename,
-            "chunks_indexed": len(chunks),
-            "metadata": {
-                "title": metadata.title,
-                "authors": metadata.authors,
-                "year": metadata.year,
-                "phase": phase,
-                "topic_category": topic
-            }
+            "chunks_indexed": result["chunks_indexed"],
+            "metadata": result.get("metadata")
         }
 
     except HTTPException:
@@ -870,7 +954,7 @@ async def delete_job_document(
 
     try:
         # Delete from ChromaDB collection
-        collection = get_job_collection(job)
+        _, collection = get_job_collection(job)
 
         results = collection.get(
             where={"doc_id": doc_id},
@@ -883,10 +967,9 @@ async def delete_job_document(
         else:
             chunks_deleted = 0
 
-        # Try to delete from S3 if configured
-        if S3_ENABLED and document.storage_key:
+        # Try to delete from S3 if storage key exists
+        if document.storage_key:
             try:
-                from ..storage import get_storage
                 storage = get_storage()
                 storage.delete_pdf(document.storage_key)
                 logger.info(f"Deleted PDF from S3: {document.storage_key}")

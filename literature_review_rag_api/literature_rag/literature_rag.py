@@ -27,6 +27,7 @@ class LiteratureReviewRAG:
             embedding_model: Embedding model name (default: BGE-base)
         """
         self.config = config or {}
+        self.normalization_enabled = self.config.get("normalization_enable", True)
 
         # Device selection
         device = self.config.get("device", "auto")
@@ -54,10 +55,84 @@ class LiteratureReviewRAG:
             logger.warning(f"Collection {collection_name} not found. Will be created during indexing.")
             self.collection = None
 
-        # Load academic term normalization maps
-        self.term_maps = self._load_term_maps(self.config.get("term_maps", {}))
+        # Load academic term normalization maps (optional)
+        term_maps_config = self.config.get("term_maps", {}) if self.normalization_enabled else {}
+        self.term_maps = self._load_term_maps(term_maps_config)
+        self._reranker = None
+        self._reranker_config = {
+            "enabled": self.config.get("use_reranking", False),
+            "model": self.config.get("reranker_model", "BAAI/bge-reranker-base"),
+            "rerank_top_k": self.config.get("rerank_top_k", 20),
+            "device": device
+        }
 
         logger.info("Literature Review RAG initialized successfully")
+
+    def _get_reranker(self):
+        """Lazy-load the reranker when enabled."""
+        if not self._reranker_config.get("enabled"):
+            return None
+        if self._reranker is None:
+            from .reranker import CrossEncoderReranker
+            self._reranker = CrossEncoderReranker(
+                model_name=self._reranker_config.get("model"),
+                device=self._reranker_config.get("device")
+            )
+        return self._reranker
+
+    def _normalize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize metadata fields for consistency."""
+        if not metadata:
+            return metadata
+
+        normalized = metadata.copy()
+        authors = normalized.get("authors")
+        if isinstance(authors, list):
+            normalized["authors"] = ", ".join(a for a in authors if a)
+        elif authors is not None:
+            normalized["authors"] = str(authors).strip()
+
+        year = normalized.get("year")
+        try:
+            if year is not None:
+                normalized["year"] = int(year)
+        except (TypeError, ValueError):
+            normalized["year"] = None
+
+        doi = normalized.get("doi")
+        if doi:
+            normalized["doi"] = str(doi).strip().lower().replace("https://doi.org/", "")
+
+        title = normalized.get("title")
+        if title:
+            normalized["title"] = " ".join(str(title).split())
+
+        return normalized
+
+    def _rerank_results(self, question: str, results: dict, n_results: int) -> dict:
+        """Rerank results using a cross-encoder."""
+        reranker = self._get_reranker()
+        if reranker is None or not results or not results.get("documents"):
+            return results
+
+        docs = results["documents"][0]
+        metas = results["metadatas"][0]
+        dists = results["distances"][0]
+
+        if not docs:
+            return results
+
+        scores = reranker.score(question, docs)
+        ranked = list(zip(scores, docs, metas, dists))
+        ranked.sort(key=lambda x: x[0], reverse=True)
+
+        top_ranked = ranked[:n_results]
+        return {
+            "documents": [[item[1] for item in top_ranked]],
+            "metadatas": [[item[2] for item in top_ranked]],
+            "distances": [[item[3] for item in top_ranked]],
+            "ids": results.get("ids", [[]])
+        }
 
     def _load_term_maps(self, yaml_term_maps: dict) -> Dict[str, Dict[str, List[str]]]:
         """
@@ -100,6 +175,8 @@ class LiteratureReviewRAG:
             (expanded_query, detected_terms) tuple
         """
         detected_terms = []
+        if not self.normalization_enabled:
+            return question, detected_terms
         query_lower = question.lower()
         expansion_terms = []
         max_expansions = self.config.get("max_expansions", 2)
@@ -144,6 +221,7 @@ class LiteratureReviewRAG:
             results["metadatas"][0],
             results["distances"][0]
         ):
+            meta = self._normalize_metadata(meta)
             score = 1 - dist
             total_pages = meta.get("total_pages") or 0
             try:
@@ -259,15 +337,20 @@ class LiteratureReviewRAG:
         # Embed query
         query_embedding = self.embeddings.embed_query(expanded_query)
 
+        # Determine candidate size for reranking
+        rerank_top_k = self._reranker_config.get("rerank_top_k", n_results)
+        candidate_k = max(n_results, rerank_top_k) if self._reranker_config.get("enabled") else n_results
+
         # Query ChromaDB
         try:
             results = self.collection.query(
                 query_embeddings=[query_embedding],
-                n_results=n_results,
+                n_results=candidate_k,
                 where=where_filter,
                 include=["documents", "metadatas", "distances"]
             )
             logger.debug(f"Query returned {len(results['documents'][0])} results")
+            results = self._rerank_results(expanded_query, results, n_results)
             return self._postprocess_results(results, n_results)
 
         except Exception as e:
@@ -442,25 +525,23 @@ class LiteratureReviewRAG:
             # Calculate statistics
             papers_by_phase = {}
             papers_by_topic = {}
-            unique_papers = set()
+            doc_metadata = {}
 
             for meta in all_metadata["metadatas"]:
-                # Track unique papers
                 doc_id = meta.get("doc_id")
-                if doc_id:
-                    unique_papers.add(doc_id)
+                if doc_id and doc_id not in doc_metadata:
+                    doc_metadata[doc_id] = meta
 
-                # Count by phase
+            for meta in doc_metadata.values():
                 phase = meta.get("phase", "Unknown")
                 papers_by_phase[phase] = papers_by_phase.get(phase, 0) + 1
 
-                # Count by topic
                 topic = meta.get("topic_category", "Unknown")
                 papers_by_topic[topic] = papers_by_topic.get(topic, 0) + 1
 
             return {
                 "total_chunks": count,
-                "total_papers": len(unique_papers),
+                "total_papers": len(doc_metadata),
                 "papers_by_phase": papers_by_phase,
                 "papers_by_topic": papers_by_topic,
                 "embedding_model": self.embeddings.model_name,
