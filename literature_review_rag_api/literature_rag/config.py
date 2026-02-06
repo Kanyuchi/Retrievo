@@ -221,6 +221,19 @@ class UploadConfig:
 
 
 @dataclass
+class AuthConfig:
+    """Authentication configuration.
+
+    Auth is REQUIRED by default for security. To disable auth (e.g., for local dev),
+    explicitly set `require_auth: false` in config or AUTH_REQUIRE_AUTH=false env var.
+    """
+    require_auth: bool = True  # Auth required by default - explicit opt-out needed
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+    oauth_redirect_url: str = "http://localhost:5173/auth/callback"
+
+
+@dataclass
 class AdvancedConfig:
     """Advanced features configuration."""
     build_citation_network: bool = False
@@ -290,6 +303,7 @@ class LiteratureRAGConfig:
     upload: UploadConfig
     advanced: AdvancedConfig
     llm: LLMConfig
+    auth: AuthConfig = field(default_factory=AuthConfig)
     agentic: AgenticConfig = field(default_factory=AgenticConfig)
     custom: Dict[str, Any] = field(default_factory=dict)
 
@@ -338,6 +352,7 @@ def load_config(config_path: Optional[str] = None) -> LiteratureRAGConfig:
         upload=_load_upload_config(yaml_config.get("upload", {})),
         advanced=_load_advanced_config(yaml_config.get("advanced", {}), env_settings),
         llm=_load_llm_config(yaml_config.get("llm", {}), env_settings),
+        auth=_load_auth_config(yaml_config.get("auth", {}), env_settings),
         agentic=_load_agentic_config(yaml_config.get("agentic", {})),
         custom=yaml_config.get("custom", {})
     )
@@ -526,6 +541,28 @@ def _load_upload_config(yaml_upload: dict) -> UploadConfig:
         allowed_extensions=yaml_upload.get("allowed_extensions", [".pdf"]),
         cleanup_temp=yaml_upload.get("cleanup_temp", True),
         processing_timeout=yaml_upload.get("processing_timeout", 300)
+    )
+
+
+def _load_auth_config(yaml_auth: dict, env_settings: Settings) -> AuthConfig:
+    """Load auth configuration with environment overrides.
+
+    Auth is REQUIRED by default. To disable, explicitly set require_auth: false
+    in YAML config or AUTH_REQUIRE_AUTH=false environment variable.
+    """
+    # Check for environment variable override
+    require_auth_env = os.getenv("AUTH_REQUIRE_AUTH")
+    if require_auth_env is not None:
+        require_auth = require_auth_env.lower() in ("true", "1", "yes")
+    else:
+        # Default to True (auth required) unless explicitly disabled in YAML
+        require_auth = yaml_auth.get("require_auth", True)
+
+    return AuthConfig(
+        require_auth=require_auth,
+        access_token_expire_minutes=env_settings.access_token_expire_minutes,
+        refresh_token_expire_days=env_settings.refresh_token_expire_days,
+        oauth_redirect_url=yaml_auth.get("oauth_redirect_url", "http://localhost:5173/auth/callback")
     )
 
 

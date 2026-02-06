@@ -112,6 +112,12 @@ async def lifespan(app: FastAPI):
             Path(upload_config.storage_path).mkdir(parents=True, exist_ok=True)
             logger.info(f"Upload directories ready: {upload_config.storage_path}")
 
+        # Log auth mode
+        if config.auth.require_auth:
+            logger.info("🔒 Authentication REQUIRED for API access")
+        else:
+            logger.warning("⚠️  Authentication DISABLED - set auth.require_auth=true for production!")
+
         # Initialize Groq client if API key is available
         if config.llm.groq_api_key:
             try:
@@ -1167,11 +1173,21 @@ def check_upload_enabled():
 
 
 def require_auth_if_configured(user=Depends(get_current_user_optional)):
-    """Enforce auth when configured."""
-    if getattr(config.auth, "require_auth", False) and user is None:
+    """Enforce auth when configured.
+
+    Auth is REQUIRED by default. To disable, explicitly set:
+    - YAML: auth.require_auth: false
+    - Or env: AUTH_REQUIRE_AUTH=false
+    """
+    # Use loaded config if available, otherwise use temp config
+    active_config = config if config is not None else config_temp
+    require_auth = getattr(active_config.auth, "require_auth", True)  # Default True
+
+    if require_auth and user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     return user
 
