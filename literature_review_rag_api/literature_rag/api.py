@@ -51,6 +51,7 @@ from .logging_utils import setup_logging, request_id_ctx
 from .rate_limiter import create_rate_limiter, RateLimitMiddleware
 from .quotas import get_user_quota_summary, get_quota_service
 from .pool import get_pool
+from .worker import get_worker
 
 # Setup structured logging (default INFO, overridden after config load)
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
@@ -900,6 +901,13 @@ async def health_check():
             stats["pool"] = pool_stats
         except Exception as e:
             stats["pool"] = {"error": str(e)}
+
+        # Add worker statistics
+        try:
+            worker_stats = get_worker().get_stats()
+            stats["worker"] = worker_stats
+        except Exception as e:
+            stats["worker"] = {"error": str(e)}
 
         return HealthResponse(
             status="healthy" if rag_system.is_ready() else "initializing",
