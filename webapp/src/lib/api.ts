@@ -654,14 +654,34 @@ class ApiClient {
     });
   }
 
-  // Delete a job
-  async deleteJob(jobId: number, accessToken?: string): Promise<{ message: string }> {
+  // Delete a job (soft delete by default, hard_delete=true for permanent)
+  async deleteJob(jobId: number, accessToken?: string, hardDelete: boolean = false): Promise<{ message: string }> {
     const headers: Record<string, string> = {};
     if (accessToken) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
-    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}`, {
+    const url = hardDelete
+      ? `${this.baseUrl}/api/jobs/${jobId}?hard_delete=true`
+      : `${this.baseUrl}/api/jobs/${jobId}`;
+    const response = await fetch(url, {
       method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || error.error || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  // Clear all documents from a job (keeps the job, removes all content)
+  async clearJob(jobId: number, accessToken?: string): Promise<{ message: string; documents_deleted: number; chunks_deleted: number }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/clear`, {
+      method: 'POST',
       headers,
     });
     if (!response.ok) {

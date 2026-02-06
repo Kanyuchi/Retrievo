@@ -60,6 +60,10 @@ export default function JobDetail() {
   const [deleteDoc, setDeleteDoc] = useState<JobDocument | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Clear knowledge base state
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
   // Search/filter
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -239,6 +243,25 @@ export default function JobDetail() {
     }
   };
 
+  const handleClearKnowledgeBase = async () => {
+    if (!accessToken || !numericJobId) return;
+
+    setIsClearing(true);
+
+    try {
+      const result = await api.clearJob(numericJobId, accessToken);
+      setShowClearConfirm(false);
+      await loadJob();
+      // Show success message briefly
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear knowledge base');
+      setShowClearConfirm(false);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const filteredDocuments = documents.filter(
     (doc) =>
       doc.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -326,6 +349,14 @@ export default function JobDetail() {
               >
                 <MessageSquare className="h-5 w-5" />
                 Query
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="flex items-center gap-2 px-4 py-2 text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
+                title="Clear all documents from this knowledge base"
+              >
+                <Trash2 className="h-5 w-5" />
+                Clear
               </button>
               <button
                 onClick={() => setShowUploadModal(true)}
@@ -743,6 +774,49 @@ export default function JobDetail() {
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Knowledge Base Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !isClearing && setShowClearConfirm(false)} />
+          <div className="relative bg-card border border-border rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-destructive/10 rounded-full">
+                <AlertCircle className="h-6 w-6 text-destructive" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">
+                Clear Knowledge Base
+              </h2>
+            </div>
+
+            <p className="text-muted-foreground mb-4">
+              Are you sure you want to clear all documents from this knowledge base?
+            </p>
+            <p className="text-muted-foreground mb-6">
+              This will delete <strong className="text-foreground">{documents.length} documents</strong> and{' '}
+              <strong className="text-foreground">{stats?.chunk_count || 0} chunks</strong>.
+              The knowledge base itself will be preserved, allowing you to upload new documents.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                disabled={isClearing}
+                className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearKnowledgeBase}
+                disabled={isClearing}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isClearing ? 'Clearing...' : 'Clear All'}
               </button>
             </div>
           </div>

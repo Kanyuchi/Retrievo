@@ -280,13 +280,16 @@ async def update_job_term_maps(
 @router.delete("/{job_id}")
 async def delete_job(
     job_id: int,
+    hard_delete: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Delete a job and all its documents.
 
-    This is a soft delete - the job is marked as deleted but data is preserved.
+    By default, this is a soft delete (job is marked as deleted but data is preserved).
+    Use ?hard_delete=true to permanently delete the job, its ChromaDB collection,
+    and all associated documents.
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -302,12 +305,126 @@ async def delete_job(
             detail="Access denied"
         )
 
-    # Soft delete
-    JobCRUD.delete(db, job)
+    if hard_delete:
+        # Hard delete: remove ChromaDB collection, storage files, and database records
+        try:
+            # Delete ChromaDB collection
+            client = chromadb.PersistentClient(path=config.storage.indices_path)
+            try:
+                client.delete_collection(job.collection_name)
+                logger.info(f"Deleted ChromaDB collection: {job.collection_name}")
+            except Exception as e:
+                logger.warning(f"Could not delete collection {job.collection_name}: {e}")
 
-    logger.info(f"Deleted job {job_id}")
+            # Delete all documents from storage
+            documents = DocumentCRUD.get_job_documents(db, job_id)
+            storage = get_storage_auto()
+            for doc in documents:
+                if doc.storage_key:
+                    try:
+                        storage.delete_pdf(doc.storage_key)
+                    except Exception as e:
+                        logger.warning(f"Could not delete file {doc.storage_key}: {e}")
+                db.delete(doc)
 
-    return {"message": "Job deleted successfully"}
+            # Delete the job record
+            db.delete(job)
+            db.commit()
+
+            logger.info(f"Hard deleted job {job_id} with all data")
+            return {"message": "Job permanently deleted", "hard_delete": True}
+
+        except Exception as e:
+            logger.error(f"Hard delete failed for job {job_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete job: {str(e)}"
+            )
+    else:
+        # Soft delete
+        JobCRUD.delete(db, job)
+        logger.info(f"Soft deleted job {job_id}")
+        return {"message": "Job deleted successfully", "hard_delete": False}
+
+
+@router.post("/{job_id}/clear")
+async def clear_job_documents(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear all documents from a job's knowledge base.
+
+    This removes all indexed documents and chunks but keeps the job itself,
+    allowing you to start fresh with new uploads.
+    """
+    job = JobCRUD.get_by_id(db, job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    try:
+        documents_deleted = 0
+        chunks_deleted = 0
+
+        # Get the ChromaDB collection
+        client = chromadb.PersistentClient(path=config.storage.indices_path)
+
+        # Delete and recreate the collection (fastest way to clear all data)
+        try:
+            client.delete_collection(job.collection_name)
+            # Recreate empty collection
+            client.create_collection(
+                name=job.collection_name,
+                metadata={"job_id": job.id, "job_name": job.name}
+            )
+            logger.info(f"Cleared ChromaDB collection: {job.collection_name}")
+        except Exception as e:
+            logger.warning(f"Could not clear collection {job.collection_name}: {e}")
+
+        # Delete all documents from storage and database
+        documents = DocumentCRUD.get_job_documents(db, job_id)
+        storage = get_storage_auto()
+
+        for doc in documents:
+            chunks_deleted += doc.chunk_count or 0
+            if doc.storage_key:
+                try:
+                    storage.delete_pdf(doc.storage_key)
+                except Exception as e:
+                    logger.warning(f"Could not delete file {doc.storage_key}: {e}")
+            db.delete(doc)
+            documents_deleted += 1
+
+        # Reset job stats
+        job.document_count = 0
+        job.chunk_count = 0
+        db.commit()
+
+        logger.info(f"Cleared job {job_id}: {documents_deleted} documents, {chunks_deleted} chunks")
+
+        return {
+            "message": "Knowledge base cleared successfully",
+            "documents_deleted": documents_deleted,
+            "chunks_deleted": chunks_deleted
+        }
+
+    except Exception as e:
+        logger.error(f"Clear failed for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear knowledge base: {str(e)}"
+        )
 
 
 @router.get("/{job_id}/stats")
