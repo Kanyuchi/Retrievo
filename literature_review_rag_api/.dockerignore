@@ -1,0 +1,68 @@
+# Data directories (created at runtime, not build time)
+data/
+indices/
+uploads/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Local config (use environment variables in container)
+.env
+.env.*
+*.local
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# Database files (mounted as volumes)
+*.db
+*.sqlite
+*.sqlite3
+
+# BM25 indices (built at runtime)
+bm25_*.pkl
+
+# ChromaDB persistence (mounted as volume)
+chroma/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db

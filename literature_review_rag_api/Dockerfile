@@ -26,8 +26,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create directories for data persistence
-RUN mkdir -p /app/data/indices /app/data/uploads /app/data/db
+# Create directories for data persistence (remove any conflicting files first)
+RUN rm -rf /app/data 2>/dev/null || true && \
+    mkdir -p /app/data/indices /app/data/uploads /app/data/db
 
 # Expose port
 EXPOSE 8001
