@@ -23,6 +23,26 @@ This ensures all changes are tracked in version control automatically without re
 
 Claude is an expert in frontend (React/TypeScript), backend (FastAPI/Python), system architecture, and full-stack integration. Apply that expertise proactively.
 
+### Multi-User Production System
+**CRITICAL:** This system is deployed in PRODUCTION on AWS with real users testing it.
+
+**ALL new features, enhancements, and bug fixes MUST support:**
+1. **User Knowledge Bases (Jobs)** - Each user has isolated knowledge bases via `/api/jobs/{id}/`
+2. **Default Knowledge Base** - Shared collection for all users via `/api/upload`, `/api/search`
+3. **AWS S3 Storage** - PDFs are stored in S3, not local filesystem
+
+**When implementing ANY feature:**
+- Apply to BOTH default knowledge base AND user knowledge bases (jobs)
+- Test with job-scoped endpoints (`/api/jobs/{id}/upload`, `/api/jobs/{id}/query`, etc.)
+- Ensure S3 storage compatibility
+- Never implement features only for the default collection
+
+**Architecture:**
+- Default KB: `literature_review_chunks` collection, shared BM25 index
+- User KBs: `job_{id}_{uuid}` collections, per-job BM25 indices (`bm25_job_{id}.pkl`)
+- Storage: AWS S3 bucket for all PDF files
+- Database: SQLite/PostgreSQL for user, job, and document metadata
+
 ---
 
 ## Project Overview

@@ -2,6 +2,7 @@
 
 Provides endpoints for managing knowledge base jobs.
 Each job represents an isolated knowledge base with its own ChromaDB collection.
+Each job has its own BM25 index for hybrid search.
 """
 
 import logging
@@ -23,6 +24,7 @@ from ..models import (
 from ..config import load_config
 from ..storage import get_storage, get_storage_auto, is_s3_configured
 from ..indexer import DocumentIndexer
+from ..bm25_retriever import BM25Retriever, BM25Config, HybridScorer
 from ..isolation import (
     get_tenant_context, TenantContext, verify_job_access,
     TenantScopedQuery
@@ -34,6 +36,9 @@ router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
 # Load config
 config = load_config()
+
+# Cache for job BM25 retrievers (lazy-loaded)
+_job_bm25_cache: dict[int, BM25Retriever] = {}
 
 
 def get_job_collection(job: Job) -> tuple[chromadb.ClientAPI, chromadb.Collection]:
@@ -51,6 +56,68 @@ def get_job_collection(job: Job) -> tuple[chromadb.ClientAPI, chromadb.Collectio
     return client, collection
 
 
+def get_job_bm25_path(job_id: int) -> str:
+    """Get the BM25 index path for a job."""
+    indices_path = Path(config.storage.indices_path)
+    return str(indices_path / f"bm25_job_{job_id}.pkl")
+
+
+def get_job_bm25_retriever(job_id: int, create_if_missing: bool = True) -> Optional[BM25Retriever]:
+    """
+    Get or create BM25 retriever for a job.
+
+    Uses caching to avoid reloading the same index multiple times.
+    """
+    global _job_bm25_cache
+
+    # Check if hybrid search is enabled
+    if not config.retrieval.use_hybrid:
+        return None
+
+    # Check cache first
+    if job_id in _job_bm25_cache:
+        return _job_bm25_cache[job_id]
+
+    # Create BM25 config for this job
+    bm25_config = BM25Config(
+        index_path=get_job_bm25_path(job_id),
+        use_stemming=config.retrieval.bm25_use_stemming,
+        min_token_length=config.retrieval.bm25_min_token_length
+    )
+
+    bm25 = BM25Retriever(bm25_config)
+
+    # Try to load existing index
+    if bm25.load_index():
+        logger.info(f"Loaded BM25 index for job {job_id} ({bm25.get_stats()['total_documents']} docs)")
+        _job_bm25_cache[job_id] = bm25
+        return bm25
+
+    # If create_if_missing, initialize empty index
+    if create_if_missing:
+        logger.info(f"Created new BM25 index for job {job_id}")
+        _job_bm25_cache[job_id] = bm25
+        return bm25
+
+    return None
+
+
+def clear_job_bm25_cache(job_id: int) -> None:
+    """Remove a job's BM25 retriever from cache."""
+    global _job_bm25_cache
+    if job_id in _job_bm25_cache:
+        del _job_bm25_cache[job_id]
+
+
+def delete_job_bm25_index(job_id: int) -> None:
+    """Delete a job's BM25 index file and clear from cache."""
+    clear_job_bm25_cache(job_id)
+    bm25_path = Path(get_job_bm25_path(job_id))
+    if bm25_path.exists():
+        bm25_path.unlink()
+        logger.info(f"Deleted BM25 index for job {job_id}")
+
+
 def require_s3_storage() -> None:
     """Ensure S3 storage is available when required."""
     if getattr(config.upload, "s3_only", False):
@@ -63,7 +130,11 @@ def require_s3_storage() -> None:
             )
 
 
-def build_job_indexer(client: chromadb.ClientAPI, collection: chromadb.Collection) -> DocumentIndexer:
+def build_job_indexer(
+    client: chromadb.ClientAPI,
+    collection: chromadb.Collection,
+    job_id: int
+) -> DocumentIndexer:
     """Create a DocumentIndexer for a job collection using shared config."""
     from langchain_huggingface import HuggingFaceEmbeddings
     import torch
@@ -81,11 +152,15 @@ def build_job_indexer(client: chromadb.ClientAPI, collection: chromadb.Collectio
         "embedding": vars(config.embedding) if hasattr(config.embedding, "__dict__") else {}
     }
 
+    # Get BM25 retriever for this job (for hybrid search sync)
+    bm25_retriever = get_job_bm25_retriever(job_id) if config.retrieval.use_hybrid else None
+
     return DocumentIndexer(
         chroma_client=client,
         collection=collection,
         embeddings=embeddings,
-        config=indexer_config
+        config=indexer_config,
+        bm25_retriever=bm25_retriever
     )
 
 
@@ -306,7 +381,7 @@ async def delete_job(
         )
 
     if hard_delete:
-        # Hard delete: remove ChromaDB collection, storage files, and database records
+        # Hard delete: remove ChromaDB collection, BM25 index, storage files, and database records
         try:
             # Delete ChromaDB collection
             client = chromadb.PersistentClient(path=config.storage.indices_path)
@@ -315,6 +390,9 @@ async def delete_job(
                 logger.info(f"Deleted ChromaDB collection: {job.collection_name}")
             except Exception as e:
                 logger.warning(f"Could not delete collection {job.collection_name}: {e}")
+
+            # Delete BM25 index for this job
+            delete_job_bm25_index(job_id)
 
             # Delete all documents from storage
             documents = DocumentCRUD.get_job_documents(db, job_id)
@@ -391,6 +469,9 @@ async def clear_job_documents(
             logger.info(f"Cleared ChromaDB collection: {job.collection_name}")
         except Exception as e:
             logger.warning(f"Could not clear collection {job.collection_name}: {e}")
+
+        # Clear BM25 index for this job (delete and let it be recreated on next upload)
+        delete_job_bm25_index(job_id)
 
         # Delete all documents from storage and database
         documents = DocumentCRUD.get_job_documents(db, job_id)
@@ -590,6 +671,7 @@ async def query_job(
     """
     Query documents in a specific job's knowledge base (raw search results).
 
+    Uses hybrid BM25 + dense search when enabled for improved retrieval.
     For LLM-powered answers with citations, use GET /{job_id}/chat instead.
     """
     from langchain_huggingface import HuggingFaceEmbeddings
@@ -628,9 +710,6 @@ async def query_job(
             encode_kwargs={"normalize_embeddings": True}
         )
 
-        # Embed query
-        query_embedding = embeddings.embed_query(question)
-
         # Build filters
         where_filter = None
         conditions = []
@@ -645,37 +724,25 @@ async def query_job(
         elif len(conditions) > 1:
             where_filter = {"$and": conditions}
 
-        # Query collection
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_sources,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
+        # Check if hybrid search is enabled and BM25 index exists
+        bm25_retriever = get_job_bm25_retriever(job.id, create_if_missing=False)
+        use_hybrid = config.retrieval.use_hybrid and bm25_retriever and bm25_retriever.is_ready()
 
-        # Format results
-        formatted_results = []
-        for i in range(len(results["documents"][0])):
-            metadata = results["metadatas"][0][i]
-            distance = results["distances"][0][i]
-            score = 1 - distance  # Convert distance to similarity
-
-            formatted_results.append({
-                "content": results["documents"][0][i],
-                "metadata": {
-                    "doc_id": metadata.get("doc_id"),
-                    "title": metadata.get("title"),
-                    "authors": metadata.get("authors"),
-                    "year": metadata.get("year"),
-                    "phase": metadata.get("phase"),
-                    "topic_category": metadata.get("topic_category")
-                },
-                "score": round(score, 4)
-            })
+        if use_hybrid:
+            # Hybrid search: combine BM25 + dense
+            formatted_results = _hybrid_query_job(
+                collection, embeddings, bm25_retriever, question, n_sources, where_filter
+            )
+        else:
+            # Dense-only search
+            formatted_results = _dense_query_job(
+                collection, embeddings, question, n_sources, where_filter
+            )
 
         return {
             "question": question,
-            "results": formatted_results
+            "results": formatted_results,
+            "hybrid_search": use_hybrid
         }
 
     except Exception as e:
@@ -684,6 +751,159 @@ async def query_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Query failed: {str(e)}"
         )
+
+
+def _dense_query_job(collection, embeddings, question: str, n_sources: int, where_filter) -> list:
+    """Execute dense-only query for a job collection."""
+    query_embedding = embeddings.embed_query(question)
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_sources,
+        where=where_filter,
+        include=["documents", "metadatas", "distances"]
+    )
+
+    formatted_results = []
+    for i in range(len(results["documents"][0])):
+        metadata = results["metadatas"][0][i]
+        distance = results["distances"][0][i]
+        score = 1 - distance
+
+        formatted_results.append({
+            "content": results["documents"][0][i],
+            "metadata": {
+                "doc_id": metadata.get("doc_id"),
+                "title": metadata.get("title"),
+                "authors": metadata.get("authors"),
+                "year": metadata.get("year"),
+                "phase": metadata.get("phase"),
+                "topic_category": metadata.get("topic_category")
+            },
+            "score": round(score, 4)
+        })
+
+    return formatted_results
+
+
+def _hybrid_query_job(
+    collection, embeddings, bm25_retriever, question: str, n_sources: int, where_filter
+) -> list:
+    """Execute hybrid BM25 + dense query for a job collection."""
+    # 1. Get BM25 candidates
+    bm25_candidates = config.retrieval.bm25_candidates
+    bm25_results = bm25_retriever.query(question, n_results=bm25_candidates)
+
+    # 2. Get dense candidates
+    query_embedding = embeddings.embed_query(question)
+    dense_k = max(bm25_candidates, n_sources * 3)
+
+    dense_results_raw = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=dense_k,
+        where=where_filter,
+        include=["documents", "metadatas", "distances"]
+    )
+
+    # Convert dense results to (chunk_id, distance) format
+    dense_results = []
+    if dense_results_raw and dense_results_raw.get("metadatas"):
+        for i, (meta, dist) in enumerate(zip(
+            dense_results_raw["metadatas"][0],
+            dense_results_raw["distances"][0]
+        )):
+            chunk_id = meta.get(
+                "chunk_id",
+                f"{meta.get('doc_id', 'unknown')}_chunk_{meta.get('chunk_index', i)}"
+            )
+            dense_results.append((chunk_id, dist))
+
+    # 3. Combine with RRF
+    hybrid_scorer = HybridScorer(
+        method=config.retrieval.hybrid_method,
+        dense_weight=config.retrieval.hybrid_weight
+    )
+    fusion_k = n_sources * 2
+    hybrid_results = hybrid_scorer.combine_scores(bm25_results, dense_results, n_results=fusion_k)
+
+    # 4. Fetch full results by chunk IDs
+    hybrid_chunk_ids = [chunk_id for chunk_id, _ in hybrid_results]
+    score_lookup = {chunk_id: score for chunk_id, score in hybrid_results}
+
+    formatted_results = []
+    if hybrid_chunk_ids:
+        try:
+            fetched = collection.get(
+                ids=hybrid_chunk_ids,
+                include=["documents", "metadatas"]
+            )
+
+            if fetched and fetched.get("ids"):
+                id_to_idx = {id_: i for i, id_ in enumerate(fetched["ids"])}
+
+                for chunk_id in hybrid_chunk_ids:
+                    if chunk_id in id_to_idx:
+                        idx = id_to_idx[chunk_id]
+                        meta = fetched["metadatas"][idx]
+
+                        # Apply where_filter manually if present
+                        if where_filter and not _matches_filter(meta, where_filter):
+                            continue
+
+                        formatted_results.append({
+                            "content": fetched["documents"][idx],
+                            "metadata": {
+                                "doc_id": meta.get("doc_id"),
+                                "title": meta.get("title"),
+                                "authors": meta.get("authors"),
+                                "year": meta.get("year"),
+                                "phase": meta.get("phase"),
+                                "topic_category": meta.get("topic_category")
+                            },
+                            "score": round(score_lookup.get(chunk_id, 0.5), 4)
+                        })
+
+                        if len(formatted_results) >= n_sources:
+                            break
+        except Exception as e:
+            logger.warning(f"Hybrid fetch failed, falling back to dense: {e}")
+            return _dense_query_job(collection, None, "", n_sources, where_filter)
+
+    return formatted_results
+
+
+def _matches_filter(metadata: dict, where_filter: dict) -> bool:
+    """Check if metadata matches a ChromaDB-style where filter."""
+    if not where_filter:
+        return True
+
+    if "$and" in where_filter:
+        return all(_matches_filter(metadata, cond) for cond in where_filter["$and"])
+
+    if "$or" in where_filter:
+        return any(_matches_filter(metadata, cond) for cond in where_filter["$or"])
+
+    for key, condition in where_filter.items():
+        if key.startswith("$"):
+            continue
+
+        value = metadata.get(key)
+
+        if isinstance(condition, dict):
+            for op, op_val in condition.items():
+                if op == "$gte" and (value is None or value < op_val):
+                    return False
+                if op == "$lte" and (value is None or value > op_val):
+                    return False
+                if op == "$eq" and value != op_val:
+                    return False
+                if op == "$contains" and (value is None or op_val not in str(value)):
+                    return False
+        else:
+            if value != condition:
+                return False
+
+    return True
 
 
 @router.get("/{job_id}/chat")
@@ -911,9 +1131,9 @@ async def upload_to_job(
         phase_names = {p.get('name', ''): p.get('full_name', '') for p in phases_config}
         phase_name = phase_names.get(phase, phase)
 
-        # Get job collection + indexer
+        # Get job collection + indexer (with BM25 for hybrid search)
         client, collection = get_job_collection(job)
-        indexer = build_job_indexer(client, collection)
+        indexer = build_job_indexer(client, collection, job.id)
 
         # Index PDF using shared pipeline (section-aware, normalization, etc.)
         result = indexer.index_pdf(
@@ -1062,6 +1282,11 @@ async def delete_job_document(
         if results and results.get("ids"):
             collection.delete(ids=results["ids"])
             chunks_deleted = len(results["ids"])
+
+            # Also remove from BM25 index
+            bm25_retriever = get_job_bm25_retriever(job_id, create_if_missing=False)
+            if bm25_retriever:
+                bm25_retriever.remove_by_doc_id(doc_id)
         else:
             chunks_deleted = 0
 
