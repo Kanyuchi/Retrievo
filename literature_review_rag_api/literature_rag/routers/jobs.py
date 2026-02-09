@@ -6,7 +6,6 @@ Each job has its own BM25 index for hybrid search.
 """
 
 import logging
-import re
 from typing import Optional
 from pathlib import Path
 
@@ -146,12 +145,7 @@ def delete_job_bm25_index(job_id: int) -> None:
         logger.info(f"Deleted BM25 index for job {job_id}")
 
 
-def _sanitize_filename(filename: str) -> str:
-    """Sanitize filename to prevent path traversal and unsafe characters."""
-    safe = Path(filename).name
-    safe = re.sub(r"[^A-Za-z0-9._-]", "_", safe)
-    safe = safe.strip("._")
-    return safe or "upload.pdf"
+from ..utils import sanitize_filename
 
 
 def require_s3_storage() -> None:
@@ -1154,7 +1148,7 @@ async def upload_to_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only PDF files are allowed"
         )
-    safe_filename = _sanitize_filename(file.filename)
+    safe_filename = sanitize_filename(file.filename)
     if not safe_filename.lower().endswith('.pdf'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

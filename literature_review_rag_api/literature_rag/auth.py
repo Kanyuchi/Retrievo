@@ -86,8 +86,51 @@ class OAuthStateStore:
             del self._states[state]
 
 
+class RedisOAuthStateStore:
+    """Redis-backed OAuth state store with TTL for multi-instance deployments."""
+
+    def __init__(self, redis_url: str, ttl_seconds: int = 600):
+        try:
+            import redis
+        except ImportError as e:
+            raise RuntimeError("redis package is required for RedisOAuthStateStore") from e
+
+        self._ttl_seconds = ttl_seconds
+        self._redis = redis.Redis.from_url(redis_url, decode_responses=True)
+
+    def generate_state(self) -> str:
+        state = secrets.token_urlsafe(32)
+        key = f"oauth_state:{state}"
+        self._redis.setex(key, self._ttl_seconds, "1")
+        return state
+
+    def validate_and_consume(self, state: str) -> bool:
+        if not state:
+            return False
+        key = f"oauth_state:{state}"
+        value = self._redis.get(key)
+        if not value:
+            logger.warning("OAuth state validation failed: unknown state")
+            return False
+        # Consume state (best-effort)
+        try:
+            self._redis.delete(key)
+        except Exception:
+            pass
+        return True
+
+
 # Global OAuth state store
-oauth_state_store = OAuthStateStore()
+_redis_url = os.getenv("REDIS_URL")
+if _redis_url:
+    try:
+        oauth_state_store = RedisOAuthStateStore(_redis_url)
+        logger.info("OAuth state store: Redis")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Redis OAuth state store: {e}. Falling back to in-memory.")
+        oauth_state_store = OAuthStateStore()
+else:
+    oauth_state_store = OAuthStateStore()
 
 # ============================================================================
 # CONFIGURATION

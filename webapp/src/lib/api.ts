@@ -293,14 +293,29 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getCookie(name: string): string | null {
+    const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const method = (options?.method || 'GET').toUpperCase();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options?.headers as Record<string, string> | undefined),
+    };
+
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrf = this.getCookie('csrf_token');
+      if (csrf) {
+        headers['X-CSRF-Token'] = csrf;
+      }
+    }
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       credentials: 'include',
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -388,6 +403,7 @@ class ApiClient {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.withCredentials = true;
+      const csrf = this.getCookie('csrf_token');
 
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable && onProgress) {
@@ -419,6 +435,9 @@ class ApiClient {
       });
 
       xhr.open('POST', `${this.baseUrl}/api/upload`);
+      if (csrf) {
+        xhr.setRequestHeader('X-CSRF-Token', csrf);
+      }
       xhr.send(formData);
     });
   }

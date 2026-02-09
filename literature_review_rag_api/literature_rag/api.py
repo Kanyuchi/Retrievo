@@ -8,7 +8,7 @@ import logging
 import os
 import uuid
 import time
-import re
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -53,6 +53,7 @@ from .rate_limiter import create_rate_limiter, RateLimitMiddleware
 from .quotas import get_user_quota_summary, get_quota_service
 from .pool import get_pool
 from .worker import get_worker
+from .utils import sanitize_filename
 
 # Setup structured logging (default INFO, overridden after config load)
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
@@ -283,6 +284,50 @@ app.add_middleware(
     allow_headers=config_temp.api.cors_headers
 )
 
+# ============================================================================
+# CSRF PROTECTION (double-submit cookie)
+# ============================================================================
+_CSRF_COOKIE_NAME = "csrf_token"
+_CSRF_HEADER_NAME = "X-CSRF-Token"
+_CSRF_EXEMPT_PATHS = {
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/oauth/google/callback",
+    "/api/auth/oauth/github/callback",
+}
+
+
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    # Ensure CSRF cookie exists
+    csrf_cookie = request.cookies.get(_CSRF_COOKIE_NAME)
+    if not csrf_cookie:
+        csrf_cookie = secrets.token_urlsafe(32)
+
+    # Enforce on unsafe methods
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if request.url.path not in _CSRF_EXEMPT_PATHS:
+            header_token = request.headers.get(_CSRF_HEADER_NAME)
+            if not header_token or header_token != csrf_cookie:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"error": "CSRF validation failed"}
+                )
+
+    response = await call_next(request)
+
+    # Set CSRF cookie (non-HttpOnly so JS can read)
+    response.set_cookie(
+        key=_CSRF_COOKIE_NAME,
+        value=csrf_cookie,
+        httponly=False,
+        secure=os.getenv("AUTH_COOKIE_SECURE", "false").lower() in ("true", "1", "yes"),
+        samesite=os.getenv("AUTH_COOKIE_SAMESITE", "lax"),
+        domain=os.getenv("AUTH_COOKIE_DOMAIN") or None,
+        path="/"
+    )
+    return response
+
 # Setup rate limiting (if enabled)
 _rate_limiter = create_rate_limiter(config_temp.api.rate_limit)
 if _rate_limiter:
@@ -346,12 +391,6 @@ def _split_comma_list(value: Any) -> list[str] | None:
     return [str(value)]
 
 
-def _sanitize_filename(filename: str) -> str:
-    """Sanitize filename to prevent path traversal and unsafe characters."""
-    safe = Path(filename).name  # strip any path components
-    safe = re.sub(r"[^A-Za-z0-9._-]", "_", safe)
-    safe = safe.strip("._")
-    return safe or "upload.pdf"
 
 
 def convert_to_document_results(results: dict) -> list[DocumentResult]:
@@ -1295,7 +1334,7 @@ async def upload_pdf(
         )
 
     original_filename = file.filename
-    safe_filename = _sanitize_filename(original_filename)
+    safe_filename = sanitize_filename(original_filename)
     file_ext = Path(safe_filename).suffix.lower()
     allowed_extensions = getattr(upload_config, 'allowed_extensions', ['.pdf'])
     if file_ext not in allowed_extensions:
@@ -1456,7 +1495,7 @@ async def upload_pdf_async(
         )
 
     original_filename = file.filename
-    safe_filename = _sanitize_filename(original_filename)
+    safe_filename = sanitize_filename(original_filename)
     file_ext = Path(safe_filename).suffix.lower()
     allowed_extensions = getattr(upload_config, 'allowed_extensions', ['.pdf'])
     if file_ext not in allowed_extensions:
