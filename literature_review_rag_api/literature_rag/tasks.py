@@ -235,6 +235,7 @@ async def process_pdf_task(
     topic: str,
     storage_path: Optional[Path],
     filename: str,
+    storage_filename: Optional[str] = None,
     owner_id: Optional[str] = "default"
 ):
     """
@@ -298,12 +299,13 @@ async def process_pdf_task(
             from .database import get_db_session, DefaultDocumentCRUD
             storage = get_storage()
             try:
+                storage_name = storage_filename or filename
                 with open(temp_file_path, "rb") as f:
                     storage_key = storage.upload_pdf(
                         job_id=owner_id,
                         phase=phase,
                         topic=topic,
-                        filename=filename,
+                        filename=storage_name,
                         file_content=f
                     )
             except Exception as e:

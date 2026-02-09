@@ -4,11 +4,10 @@ Provides endpoints for user registration, login, token refresh, and OAuth.
 """
 
 import logging
-import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import (
@@ -20,6 +19,8 @@ from ..auth import (
     get_google_auth_url, get_github_auth_url,
     exchange_google_code, exchange_github_code,
     get_google_user_info, get_github_user_info,
+    generate_oauth_state, validate_oauth_state,
+    set_auth_cookies, clear_auth_cookies,
     GOOGLE_CLIENT_ID, GITHUB_CLIENT_ID, OAUTH_REDIRECT_URL
 )
 from ..models import (
@@ -42,6 +43,7 @@ init_db()
 @router.post("/register", response_model=TokenResponse)
 async def register(
     request: RegisterRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -70,13 +72,14 @@ async def register(
 
     # Generate tokens
     tokens = create_token_pair(user.id, user.email, db)
-
+    set_auth_cookies(response, tokens)
     return TokenResponse(**tokens)
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: LoginRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -120,13 +123,15 @@ async def login(
 
     # Generate tokens
     tokens = create_token_pair(user.id, user.email, db)
-
+    set_auth_cookies(response, tokens)
     return TokenResponse(**tokens)
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     request: RefreshRequest,
+    response: Response,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -134,8 +139,16 @@ async def refresh_token(
 
     Returns new access and refresh tokens.
     """
+    # Get refresh token from body or cookie
+    refresh_token_value = request.refresh_token or http_request.cookies.get("refresh_token")
+    if not refresh_token_value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing"
+        )
+
     # Decode refresh token
-    payload = decode_token(request.refresh_token)
+    payload = decode_token(refresh_token_value)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -150,7 +163,7 @@ async def refresh_token(
         )
 
     # Check if token exists and is valid
-    token_hash = hash_token(request.refresh_token)
+    token_hash = hash_token(refresh_token_value)
     stored_token = RefreshTokenCRUD.get_by_hash(db, token_hash)
 
     if not stored_token:
@@ -178,24 +191,29 @@ async def refresh_token(
 
     # Generate new tokens
     tokens = create_token_pair(user.id, user.email, db)
-
+    set_auth_cookies(response, tokens)
     return TokenResponse(**tokens)
 
 
 @router.post("/logout")
 async def logout(
     request: RefreshRequest,
+    response: Response,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
     Logout by revoking the refresh token.
     """
-    token_hash = hash_token(request.refresh_token)
-    stored_token = RefreshTokenCRUD.get_by_hash(db, token_hash)
+    refresh_token_value = request.refresh_token or http_request.cookies.get("refresh_token")
+    if refresh_token_value:
+        token_hash = hash_token(refresh_token_value)
+        stored_token = RefreshTokenCRUD.get_by_hash(db, token_hash)
 
-    if stored_token:
-        RefreshTokenCRUD.revoke(db, stored_token)
+        if stored_token:
+            RefreshTokenCRUD.revoke(db, stored_token)
 
+    clear_auth_cookies(response)
     return {"message": "Logged out successfully"}
 
 
@@ -235,7 +253,7 @@ async def google_oauth_redirect():
             detail="Google OAuth is not configured"
         )
 
-    state = secrets.token_urlsafe(32)
+    state = generate_oauth_state("google")
     auth_url = get_google_auth_url(state, f"{OAUTH_REDIRECT_URL}/google")
 
     return {
@@ -247,6 +265,7 @@ async def google_oauth_redirect():
 @router.post("/oauth/google/callback", response_model=TokenResponse)
 async def google_oauth_callback(
     request: OAuthCallbackRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -258,6 +277,13 @@ async def google_oauth_callback(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth is not configured"
+        )
+
+    # Validate OAuth state (CSRF protection)
+    if not request.state or not validate_oauth_state(request.state):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired OAuth state"
         )
 
     # Exchange code for access token
@@ -318,7 +344,7 @@ async def google_oauth_callback(
 
     # Generate tokens
     tokens = create_token_pair(user.id, user.email, db)
-
+    set_auth_cookies(response, tokens)
     return TokenResponse(**tokens)
 
 
@@ -335,7 +361,7 @@ async def github_oauth_redirect():
             detail="GitHub OAuth is not configured"
         )
 
-    state = secrets.token_urlsafe(32)
+    state = generate_oauth_state("github")
     auth_url = get_github_auth_url(state)
 
     return {
@@ -347,6 +373,7 @@ async def github_oauth_redirect():
 @router.post("/oauth/github/callback", response_model=TokenResponse)
 async def github_oauth_callback(
     request: OAuthCallbackRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -358,6 +385,13 @@ async def github_oauth_callback(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GitHub OAuth is not configured"
+        )
+
+    # Validate OAuth state (CSRF protection)
+    if not request.state or not validate_oauth_state(request.state):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired OAuth state"
         )
 
     # Exchange code for access token
@@ -417,7 +451,7 @@ async def github_oauth_callback(
 
     # Generate tokens
     tokens = create_token_pair(user.id, user.email, db)
-
+    set_auth_cookies(response, tokens)
     return TokenResponse(**tokens)
 
 

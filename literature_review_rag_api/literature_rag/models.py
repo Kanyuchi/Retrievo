@@ -392,7 +392,7 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Request model for token refresh."""
-    refresh_token: str = Field(..., description="Refresh token")
+    refresh_token: Optional[str] = Field(default=None, description="Refresh token")
 
 
 class UserResponse(BaseModel):

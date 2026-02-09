@@ -2,10 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { api } from '../lib/api';
 import type { UserResponse, TokenResponse } from '../lib/api';
 
-// Storage keys
-const ACCESS_TOKEN_KEY = 'retrievo_access_token';
-const REFRESH_TOKEN_KEY = 'retrievo_refresh_token';
-
 interface AuthContextType {
   user: UserResponse | null;
   isLoading: boolean;
@@ -25,23 +21,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Save tokens to localStorage
+  // Save tokens in memory (cookies are set by the server)
   const saveTokens = useCallback((tokens: TokenResponse) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
     setAccessToken(tokens.access_token);
   }, []);
 
-  // Clear tokens from localStorage
+  // Clear tokens from memory
   const clearTokens = useCallback(() => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
     setUser(null);
   }, []);
 
   // Fetch current user with token
-  const fetchUser = useCallback(async (token: string): Promise<UserResponse | null> => {
+  const fetchUser = useCallback(async (token?: string): Promise<UserResponse | null> => {
     try {
       const userData = await api.getCurrentUser(token);
       return userData;
@@ -53,15 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh authentication
   const refreshAuth = useCallback(async (): Promise<boolean> => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (!refreshToken) {
-      return false;
-    }
-
     try {
-      const tokens = await api.refreshToken(refreshToken);
+      const tokens = await api.refreshToken();
       saveTokens(tokens);
-      const userData = await fetchUser(tokens.access_token);
+      const userData = await fetchUser();
       if (userData) {
         setUser(userData);
         return true;
@@ -77,20 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-
-      if (storedAccessToken) {
-        setAccessToken(storedAccessToken);
-        const userData = await fetchUser(storedAccessToken);
-
-        if (userData) {
-          setUser(userData);
-        } else {
-          // Access token expired, try refresh
-          const refreshed = await refreshAuth();
-          if (!refreshed) {
-            clearTokens();
-          }
+      const userData = await fetchUser();
+      if (userData) {
+        setUser(userData);
+      } else {
+        // Try refresh via cookies
+        const refreshed = await refreshAuth();
+        if (!refreshed) {
+          clearTokens();
         }
       }
 
@@ -104,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const tokens = await api.login(email, password);
     saveTokens(tokens);
-    const userData = await fetchUser(tokens.access_token);
+    const userData = await fetchUser();
     if (userData) {
       setUser(userData);
     } else {
@@ -116,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(async (email: string, password: string, name?: string) => {
     const tokens = await api.register(email, password, name);
     saveTokens(tokens);
-    const userData = await fetchUser(tokens.access_token);
+    const userData = await fetchUser();
     if (userData) {
       setUser(userData);
     } else {
@@ -126,13 +107,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Logout
   const logout = useCallback(async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (refreshToken) {
-      try {
-        await api.logout(refreshToken);
-      } catch (error) {
-        console.error('Logout API call failed:', error);
-      }
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error('Logout API call failed:', error);
     }
     clearTokens();
   }, [clearTokens]);
@@ -145,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const tokens = await api.handleOAuthCallback(provider, code, state);
     saveTokens(tokens);
-    const userData = await fetchUser(tokens.access_token);
+    const userData = await fetchUser();
     if (userData) {
       setUser(userData);
     } else {

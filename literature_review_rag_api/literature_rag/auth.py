@@ -7,18 +7,87 @@ import os
 import logging
 import hashlib
 import secrets
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict, Any
 
 import bcrypt
 from jose import JWTError, jwt
-from fastapi import HTTPException, status, Depends, Request
+from fastapi import HTTPException, status, Depends, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from .database import get_db, User, UserCRUD, RefreshTokenCRUD
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# OAUTH STATE STORE (CSRF Protection)
+# ============================================================================
+
+class OAuthStateStore:
+    """
+    In-memory store for OAuth state tokens with TTL.
+
+    Provides CSRF protection by validating that the state parameter
+    returned from OAuth provider matches one we generated.
+    """
+
+    def __init__(self, ttl_seconds: int = 600):  # 10 minute TTL
+        self._states: Dict[str, datetime] = {}
+        self._lock = threading.Lock()
+        self._ttl = timedelta(seconds=ttl_seconds)
+
+    def generate_state(self) -> str:
+        """Generate a new state token and store it."""
+        state = secrets.token_urlsafe(32)
+        with self._lock:
+            # Clean up expired states first
+            self._cleanup_expired()
+            self._states[state] = datetime.utcnow()
+        return state
+
+    def validate_and_consume(self, state: str) -> bool:
+        """
+        Validate a state token and remove it from the store.
+
+        Returns True if valid, False if invalid or expired.
+        State tokens are single-use (consumed on validation).
+        """
+        if not state:
+            return False
+
+        with self._lock:
+            self._cleanup_expired()
+
+            if state not in self._states:
+                logger.warning(f"OAuth state validation failed: unknown state")
+                return False
+
+            # Consume the state (single-use)
+            created_at = self._states.pop(state)
+            age = datetime.utcnow() - created_at
+
+            if age > self._ttl:
+                logger.warning(f"OAuth state validation failed: state expired (age: {age})")
+                return False
+
+            return True
+
+    def _cleanup_expired(self):
+        """Remove expired states (call with lock held)."""
+        now = datetime.utcnow()
+        expired = [
+            state for state, created_at in self._states.items()
+            if now - created_at > self._ttl
+        ]
+        for state in expired:
+            del self._states[state]
+
+
+# Global OAuth state store
+oauth_state_store = OAuthStateStore()
 
 # ============================================================================
 # CONFIGURATION
@@ -67,6 +136,11 @@ OAUTH_REDIRECT_URL = os.getenv("OAUTH_REDIRECT_URL", "http://localhost:5173/auth
 
 # Security scheme for FastAPI
 security = HTTPBearer(auto_error=False)
+
+# Cookie settings (set secure flags via environment in production)
+AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "lax")  # "lax", "strict", "none"
+AUTH_COOKIE_DOMAIN = os.getenv("AUTH_COOKIE_DOMAIN")  # optional
 
 
 # ============================================================================
@@ -210,13 +284,47 @@ def create_token_pair(
     }
 
 
+def set_auth_cookies(response: Response, tokens: Dict[str, Any]) -> None:
+    """Set HttpOnly auth cookies for access and refresh tokens."""
+    access_max_age = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    refresh_max_age = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+
+    response.set_cookie(
+        key="access_token",
+        value=tokens["access_token"],
+        max_age=access_max_age,
+        httponly=True,
+        secure=AUTH_COOKIE_SECURE,
+        samesite=AUTH_COOKIE_SAMESITE,
+        domain=AUTH_COOKIE_DOMAIN,
+        path="/"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        max_age=refresh_max_age,
+        httponly=True,
+        secure=AUTH_COOKIE_SECURE,
+        samesite=AUTH_COOKIE_SAMESITE,
+        domain=AUTH_COOKIE_DOMAIN,
+        path="/"
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Clear auth cookies on logout."""
+    response.delete_cookie("access_token", path="/", domain=AUTH_COOKIE_DOMAIN)
+    response.delete_cookie("refresh_token", path="/", domain=AUTH_COOKIE_DOMAIN)
+
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCIES
 # ============================================================================
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ) -> User:
     """
     FastAPI dependency to get the current authenticated user.
@@ -224,14 +332,18 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif request is not None:
+        token = request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"}
         )
-
-    token = credentials.credentials
     payload = decode_token(token)
 
     if not payload:
@@ -275,17 +387,18 @@ async def get_current_user(
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ) -> Optional[User]:
     """
     FastAPI dependency to optionally get the current user.
     Returns None if not authenticated (doesn't raise exception).
     """
-    if not credentials:
+    if not credentials and request is None:
         return None
 
     try:
-        return await get_current_user(credentials, db)
+        return await get_current_user(credentials, db, request)
     except HTTPException:
         return None
 
@@ -443,3 +556,34 @@ def get_github_auth_url(state: str) -> str:
     }
 
     return f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+
+
+def generate_oauth_state(prefix: Optional[str] = None) -> str:
+    """Generate and store a new OAuth state token for CSRF protection.
+
+    If prefix is provided (e.g., "google" or "github"), it is prepended
+    for client-side provider detection: "{prefix}:{token}".
+    """
+    token = oauth_state_store.generate_state()
+    if prefix:
+        return f"{prefix}:{token}"
+    return token
+
+
+def validate_oauth_state(state: str) -> bool:
+    """
+    Validate an OAuth state token.
+
+    This should be called in OAuth callback endpoints to verify
+    that the state parameter matches one we generated.
+
+    Returns True if valid, False otherwise.
+    The state is consumed (single-use) upon successful validation.
+    """
+    if not state:
+        return False
+    # Allow optional provider prefix (e.g., "google:..." or "github:...")
+    if ":" in state:
+        _, token = state.split(":", 1)
+        return oauth_state_store.validate_and_consume(token)
+    return oauth_state_store.validate_and_consume(state)

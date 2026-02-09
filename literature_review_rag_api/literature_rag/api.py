@@ -8,6 +8,7 @@ import logging
 import os
 import uuid
 import time
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -343,6 +344,14 @@ def _split_comma_list(value: Any) -> list[str] | None:
         items = [item.strip() for item in value.split(",") if item.strip()]
         return items or None
     return [str(value)]
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and unsafe characters."""
+    safe = Path(filename).name  # strip any path components
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", safe)
+    safe = safe.strip("._")
+    return safe or "upload.pdf"
 
 
 def convert_to_document_results(results: dict) -> list[DocumentResult]:
@@ -1285,7 +1294,9 @@ async def upload_pdf(
             detail="Filename is required"
         )
 
-    file_ext = Path(file.filename).suffix.lower()
+    original_filename = file.filename
+    safe_filename = _sanitize_filename(original_filename)
+    file_ext = Path(safe_filename).suffix.lower()
     allowed_extensions = getattr(upload_config, 'allowed_extensions', ['.pdf'])
     if file_ext not in allowed_extensions:
         raise HTTPException(
@@ -1310,7 +1321,7 @@ async def upload_pdf(
 
     # Save to temp directory
     temp_path = Path(upload_config.temp_path)
-    temp_file = temp_path / f"{upload_id}_{file.filename}"
+    temp_file = temp_path / f"{upload_id}_{safe_filename}"
 
     try:
         # Write file to temp location
@@ -1340,7 +1351,7 @@ async def upload_pdf(
                         job_id="default",
                         phase=phase,
                         topic=topic,
-                        filename=file.filename,
+                        filename=safe_filename,
                         file_content=f
                     )
                 if temp_file.exists():
@@ -1356,7 +1367,7 @@ async def upload_pdf(
                     DefaultDocumentCRUD.create(
                         db=db,
                         doc_id=result["doc_id"],
-                        filename=file.filename,
+                        filename=original_filename,
                         storage_key=storage_key,
                         file_size=len(contents),
                         title=metadata.get("title"),
@@ -1388,7 +1399,7 @@ async def upload_pdf(
             return UploadResponse(
                 success=True,
                 doc_id=result["doc_id"],
-                filename=file.filename,
+                filename=original_filename,
                 chunks_indexed=result["chunks_indexed"],
                 metadata=result["metadata"],
                 error=None
@@ -1401,7 +1412,7 @@ async def upload_pdf(
             return UploadResponse(
                 success=False,
                 doc_id=None,
-                filename=file.filename,
+                filename=original_filename,
                 chunks_indexed=0,
                 metadata=None,
                 error=result.get("error", "Unknown error during indexing")
@@ -1444,7 +1455,9 @@ async def upload_pdf_async(
             detail="Filename is required"
         )
 
-    file_ext = Path(file.filename).suffix.lower()
+    original_filename = file.filename
+    safe_filename = _sanitize_filename(original_filename)
+    file_ext = Path(safe_filename).suffix.lower()
     allowed_extensions = getattr(upload_config, 'allowed_extensions', ['.pdf'])
     if file_ext not in allowed_extensions:
         raise HTTPException(
@@ -1465,7 +1478,7 @@ async def upload_pdf_async(
     upload_id = str(uuid.uuid4())[:8]
     temp_path = Path(upload_config.temp_path)
     temp_path.mkdir(parents=True, exist_ok=True)
-    temp_file = temp_path / f"{upload_id}_{file.filename}"
+    temp_file = temp_path / f"{upload_id}_{safe_filename}"
 
     try:
         # Write file to temp location
@@ -1476,7 +1489,7 @@ async def upload_pdf_async(
 
         # Create task
         task = task_store.create_task(
-            filename=file.filename,
+            filename=original_filename,
             phase=phase,
             topic=topic,
             temp_file_path=str(temp_file)
@@ -1497,7 +1510,8 @@ async def upload_pdf_async(
                 phase_name=phase_name,
                 topic=topic,
                 storage_path=None,
-                filename=file.filename,
+                filename=original_filename,
+                storage_filename=safe_filename,
                 owner_id="default"
             )
         )
@@ -1506,7 +1520,7 @@ async def upload_pdf_async(
             "task_id": task.task_id,
             "status": task.status.value,
             "message": "Upload accepted, processing started",
-            "filename": file.filename,
+            "filename": original_filename,
             "phase": phase,
             "topic": topic
         }
@@ -1523,7 +1537,7 @@ async def upload_pdf_async(
         )
 
 
-@app.get("/api/upload/{task_id}/status")
+@app.get("/api/upload/{task_id}/status", dependencies=[Depends(require_auth_if_configured)])
 async def get_upload_status(task_id: str):
     """
     Get the status of an async upload task.
@@ -1542,7 +1556,7 @@ async def get_upload_status(task_id: str):
     return task.to_dict()
 
 
-@app.get("/api/upload/tasks")
+@app.get("/api/upload/tasks", dependencies=[Depends(require_auth_if_configured)])
 async def list_upload_tasks(limit: int = 20):
     """
     List recent upload tasks.

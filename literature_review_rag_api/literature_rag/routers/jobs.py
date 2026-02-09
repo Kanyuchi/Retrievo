@@ -6,6 +6,7 @@ Each job has its own BM25 index for hybrid search.
 """
 
 import logging
+import re
 from typing import Optional
 from pathlib import Path
 
@@ -143,6 +144,14 @@ def delete_job_bm25_index(job_id: int) -> None:
     if bm25_path.exists():
         bm25_path.unlink()
         logger.info(f"Deleted BM25 index for job {job_id}")
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and unsafe characters."""
+    safe = Path(filename).name
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", safe)
+    safe = safe.strip("._")
+    return safe or "upload.pdf"
 
 
 def require_s3_storage() -> None:
@@ -1140,7 +1149,13 @@ async def upload_to_job(
     require_s3_storage()
 
     # Validate file
-    if not file.filename or not file.filename.lower().endswith('.pdf'):
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files are allowed"
+        )
+    safe_filename = _sanitize_filename(file.filename)
+    if not safe_filename.lower().endswith('.pdf'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only PDF files are allowed"
@@ -1159,7 +1174,7 @@ async def upload_to_job(
     upload_id = str(uuid.uuid4())[:8]
     temp_dir = Path(config.upload.temp_path)
     temp_dir.mkdir(parents=True, exist_ok=True)
-    temp_file = temp_dir / f"{upload_id}_{file.filename}"
+    temp_file = temp_dir / f"{upload_id}_{safe_filename}"
 
     try:
         with open(temp_file, "wb") as f:
@@ -1202,7 +1217,7 @@ async def upload_to_job(
                     job_id=job_id,
                     phase=phase,
                     topic=topic,
-                    filename=file.filename,
+                    filename=safe_filename,
                     file_content=f
                 )
         except Exception as e:
@@ -1232,7 +1247,7 @@ async def upload_to_job(
             db=db,
             job_id=job_id,
             doc_id=result["doc_id"],
-            filename=f"{upload_id}_{file.filename}",
+            filename=f"{upload_id}_{safe_filename}",
             original_filename=file.filename,
             title=result["metadata"].get("title") if result.get("metadata") else None,
             authors=authors_value,

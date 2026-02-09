@@ -295,6 +295,7 @@ class ApiClient {
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      credentials: 'include',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -386,6 +387,7 @@ class ApiClient {
     // Use XMLHttpRequest for progress tracking
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      xhr.withCredentials = true;
 
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable && onProgress) {
@@ -439,6 +441,7 @@ class ApiClient {
   async deleteDocument(docId: string): Promise<DeleteResponse> {
     const response = await fetch(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -463,6 +466,7 @@ class ApiClient {
     const response = await fetch(`${this.baseUrl}/api/upload/async`, {
       method: 'POST',
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -526,28 +530,28 @@ class ApiClient {
   }
 
   // Refresh access token
-  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+  async refreshToken(refreshToken?: string): Promise<TokenResponse> {
     return this.fetch('/api/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
     });
   }
 
   // Logout (invalidate refresh token)
-  async logout(refreshToken: string): Promise<{ message: string }> {
+  async logout(refreshToken?: string): Promise<{ message: string }> {
     return this.fetch('/api/auth/logout', {
       method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
     });
   }
 
   // Get current user (requires auth)
-  async getCurrentUser(accessToken: string): Promise<UserResponse> {
-    return this.fetch('/api/auth/me', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+  async getCurrentUser(accessToken?: string): Promise<UserResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/auth/me', { headers });
   }
 
   // Get OAuth configuration
@@ -666,6 +670,7 @@ class ApiClient {
     const response = await fetch(url, {
       method: 'DELETE',
       headers,
+      credentials: 'include',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -683,6 +688,7 @@ class ApiClient {
     const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/clear`, {
       method: 'POST',
       headers,
+      credentials: 'include',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -739,6 +745,7 @@ class ApiClient {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -764,6 +771,7 @@ class ApiClient {
       {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       }
     );
     if (!response.ok) {
