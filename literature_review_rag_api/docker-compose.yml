@@ -32,6 +32,9 @@ services:
       # Groq LLM (for chat synthesis)
       - GROQ_API_KEY=${GROQ_API_KEY}
 
+      # OpenAI (for embeddings)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
       # OAuth (optional)
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
@@ -42,7 +45,7 @@ services:
       # Persist database and indices
       - ./data:/app/data
       # Mount indices (pre-built default collection)
-      - ./indices:/app/indices:ro
+      - ./indices:/app/indices
       # Mount config
       - ./config:/app/config:ro
     restart: unless-stopped
