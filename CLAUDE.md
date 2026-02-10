@@ -95,22 +95,23 @@ This key is gitignored and must NEVER be committed. Always use this key when dep
 ### Production Server
 - **Host**: `13.49.191.201`
 - **User**: `ubuntu`
-- **App Directory**: `~/lit-rag-api`
+- **Git Repo**: `~/literature_review_rag_api`
+- **Docker Context**: `~/literature_review_rag_api/literature_review_rag_api/`
 
 ### Deploy Backend
 ```bash
-ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd lit-rag-api && git pull origin main && docker compose down && docker compose up -d --build"
+ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd literature_review_rag_api && git pull origin main && cd literature_review_rag_api && sudo docker-compose up -d --build --force-recreate"
 ```
 
 ### Deploy Frontend
 ```bash
 cd webapp && npm run build
-scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/lit-rag-api/webapp-dist/
+scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/literature_review_rag_api/webapp-dist/
 ```
 
 ### View Logs
 ```bash
-ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd lit-rag-api && docker compose logs -f --tail=100"
+ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd literature_review_rag_api/literature_review_rag_api && sudo docker-compose logs -f --tail=100"
 ```
 
 ---
