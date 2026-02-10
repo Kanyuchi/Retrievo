@@ -106,7 +106,7 @@ ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd literature_review_rag_api &&
 ### Deploy Frontend
 ```bash
 cd webapp && npm run build
-scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/literature_review_rag_api/webapp-dist/
+scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/lit_rag_webapp/
 ```
 
 ### View Logs
