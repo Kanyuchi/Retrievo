@@ -128,7 +128,7 @@ export default function Files() {
     try {
       setLoading(true);
       if (isDefaultSelected) {
-        const response = await api.listDocuments({ limit: 500 });
+        const response = await api.listDocuments({ limit: 500 }, accessToken || undefined);
         setDocuments(response.documents.map(doc => ({
           doc_id: doc.doc_id,
           title: doc.title,
@@ -167,7 +167,7 @@ export default function Files() {
 
   const loadUploadConfig = async () => {
     try {
-      const config = await api.getUploadConfig();
+      const config = await api.getUploadConfig(accessToken || undefined);
       setUploadConfig(config);
     } catch (error) {
       console.error('Failed to load upload config:', error);
@@ -259,7 +259,8 @@ export default function Files() {
         const uploadResponse = await api.uploadPDFAsync(
           selectedFile,
           selectedPhase,
-          topic
+          topic,
+          accessToken || undefined
         );
 
         setUploadProgress(10);
@@ -273,7 +274,8 @@ export default function Files() {
             setUploadMessage(status.message);
           },
           500,
-          600
+          600,
+          accessToken || undefined
         );
 
         if (finalStatus.status === 'completed' && finalStatus.result) {
@@ -342,7 +344,7 @@ export default function Files() {
       setDeleting(true);
 
       if (isDefaultSelected) {
-        const result = await api.deleteDocument(documentToDelete.doc_id);
+        const result = await api.deleteDocument(documentToDelete.doc_id, accessToken || undefined);
         if (result.success) {
           toast.success('Document deleted', {
             description: `Removed ${result.chunks_deleted} chunks`,

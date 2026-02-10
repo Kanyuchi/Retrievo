@@ -327,8 +327,12 @@ class ApiClient {
   }
 
   // Stats
-  async getStats(): Promise<StatsResponse> {
-    return this.fetch('/api/stats');
+  async getStats(accessToken?: string): Promise<StatsResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/stats', { headers });
   }
 
   // Papers
@@ -336,13 +340,17 @@ class ApiClient {
     phase_filter?: string;
     topic_filter?: string;
     limit?: number;
-  }): Promise<PapersResponse> {
+  }, accessToken?: string): Promise<PapersResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
     const searchParams = new URLSearchParams();
     if (params?.phase_filter) searchParams.set('phase_filter', params.phase_filter);
     if (params?.topic_filter) searchParams.set('topic_filter', params.topic_filter);
     if (params?.limit) searchParams.set('limit', params.limit.toString());
-    
-    return this.fetch(`/api/papers?${searchParams.toString()}`);
+
+    return this.fetch(`/api/papers?${searchParams.toString()}`, { headers });
   }
 
   // Semantic Search
@@ -353,7 +361,11 @@ class ApiClient {
     topic_filter?: string;
     year_min?: number;
     year_max?: number;
-  }): Promise<SearchResult[]> {
+  }, accessToken?: string): Promise<SearchResult[]> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
     const searchParams = new URLSearchParams();
     searchParams.set('query', params.query);
     if (params.n_results) searchParams.set('n_results', params.n_results.toString());
@@ -361,12 +373,16 @@ class ApiClient {
     if (params.topic_filter) searchParams.set('topic_filter', params.topic_filter);
     if (params.year_min) searchParams.set('year_min', params.year_min.toString());
     if (params.year_max) searchParams.set('year_max', params.year_max.toString());
-    
-    return this.fetch(`/api/search?${searchParams.toString()}`);
+
+    return this.fetch(`/api/search?${searchParams.toString()}`, { headers });
   }
 
   // Query (for chat) - uses agentic LLM-powered /api/chat endpoint
-  async query(request: QueryRequest): Promise<ChatResponse> {
+  async query(request: QueryRequest, accessToken?: string): Promise<ChatResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
     const searchParams = new URLSearchParams();
     searchParams.set('question', request.question);
     if (request.n_results) searchParams.set('n_sources', request.n_results.toString());
@@ -374,7 +390,7 @@ class ApiClient {
     if (request.topic_filter) searchParams.set('topic_filter', request.topic_filter);
     if (request.deep_analysis) searchParams.set('deep_analysis', 'true');
 
-    return this.fetch(`/api/chat?${searchParams.toString()}`);
+    return this.fetch(`/api/chat?${searchParams.toString()}`, { headers });
   }
 
   // Health check
@@ -383,8 +399,12 @@ class ApiClient {
   }
 
   // Upload configuration
-  async getUploadConfig(): Promise<UploadConfigResponse> {
-    return this.fetch('/api/upload/config');
+  async getUploadConfig(accessToken?: string): Promise<UploadConfigResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/upload/config', { headers });
   }
 
   // Upload PDF
@@ -392,7 +412,8 @@ class ApiClient {
     file: File,
     phase: string,
     topic: string,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    accessToken?: string
   ): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -438,6 +459,9 @@ class ApiClient {
       if (csrf) {
         xhr.setRequestHeader('X-CSRF-Token', csrf);
       }
+      if (accessToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+      }
       xhr.send(formData);
     });
   }
@@ -447,19 +471,28 @@ class ApiClient {
     phase_filter?: string;
     topic_filter?: string;
     limit?: number;
-  }): Promise<DocumentListResponse> {
+  }, accessToken?: string): Promise<DocumentListResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
     const searchParams = new URLSearchParams();
     if (params?.phase_filter) searchParams.set('phase_filter', params.phase_filter);
     if (params?.topic_filter) searchParams.set('topic_filter', params.topic_filter);
     if (params?.limit) searchParams.set('limit', params.limit.toString());
 
-    return this.fetch(`/api/documents?${searchParams.toString()}`);
+    return this.fetch(`/api/documents?${searchParams.toString()}`, { headers });
   }
 
   // Delete document
-  async deleteDocument(docId: string): Promise<DeleteResponse> {
+  async deleteDocument(docId: string, accessToken?: string): Promise<DeleteResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
     const response = await fetch(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
+      headers,
       credentials: 'include',
     });
 
@@ -475,15 +508,22 @@ class ApiClient {
   async uploadPDFAsync(
     file: File,
     phase: string,
-    topic: string
+    topic: string,
+    accessToken?: string
   ): Promise<AsyncUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('phase', phase);
     formData.append('topic', topic);
 
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
     const response = await fetch(`${this.baseUrl}/api/upload/async`, {
       method: 'POST',
+      headers,
       body: formData,
       credentials: 'include',
     });
@@ -497,8 +537,12 @@ class ApiClient {
   }
 
   // Get upload task status
-  async getUploadStatus(taskId: string): Promise<TaskStatusResponse> {
-    return this.fetch(`/api/upload/${encodeURIComponent(taskId)}/status`);
+  async getUploadStatus(taskId: string, accessToken?: string): Promise<TaskStatusResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/upload/${encodeURIComponent(taskId)}/status`, { headers });
   }
 
   // Poll for upload completion
@@ -506,12 +550,13 @@ class ApiClient {
     taskId: string,
     onProgress?: (status: TaskStatusResponse) => void,
     intervalMs: number = 500,
-    maxAttempts: number = 600 // 5 minutes max
+    maxAttempts: number = 600, // 5 minutes max
+    accessToken?: string
   ): Promise<TaskStatusResponse> {
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-      const status = await this.getUploadStatus(taskId);
+      const status = await this.getUploadStatus(taskId, accessToken);
 
       if (onProgress) {
         onProgress(status);

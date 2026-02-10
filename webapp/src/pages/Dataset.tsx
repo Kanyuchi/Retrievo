@@ -68,9 +68,10 @@ export default function Dataset() {
 
   // For default collection, use existing hooks
   const { data: papersData, loading: defaultLoading, error: defaultError } = usePapers(
-    isDefaultSelected ? { limit: 500 } : undefined
+    isDefaultSelected ? { limit: 500 } : undefined,
+    accessToken || undefined
   );
-  const { data: defaultStats } = useStats();
+  const { data: defaultStats } = useStats(accessToken || undefined);
 
   // For job collections, load manually
   const [jobPapers, setJobPapers] = useState<DisplayPaper[]>([]);

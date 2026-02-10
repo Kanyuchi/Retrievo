@@ -87,7 +87,7 @@ export default function JobDetail() {
         api.getJob(numericJobId, accessToken),
         api.getJobDocuments(numericJobId, { limit: 100 }, accessToken),
         api.getJobStats(numericJobId, accessToken),
-        api.getUploadConfig(),
+        api.getUploadConfig(accessToken),
       ]);
 
       setJob(jobData);

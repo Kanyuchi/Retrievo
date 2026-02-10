@@ -65,7 +65,7 @@ export default function Chat() {
 
   const { selectedKB, isDefaultSelected } = useKnowledgeBase();
   const { accessToken } = useAuth();
-  const { data: defaultStats } = useStats();
+  const { data: defaultStats } = useStats(accessToken || undefined);
 
   // Job stats for non-default KB
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
@@ -129,7 +129,7 @@ export default function Chat() {
           phase_filter: phaseFilter || undefined,
           topic_filter: topicFilter || undefined,
           deep_analysis: deepAnalysis,
-        });
+        }, accessToken || undefined);
 
         assistantContent = response.answer;
         sources = response.sources?.map(source => ({

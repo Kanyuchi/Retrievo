@@ -32,8 +32,8 @@ const itemVariants = {
 };
 
 export default function Home() {
-  const { data: stats, loading, error } = useStats();
   const { isAuthenticated, isLoading: authLoading, accessToken, user } = useAuth();
+  const { data: stats, loading, error } = useStats(accessToken || undefined);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
 

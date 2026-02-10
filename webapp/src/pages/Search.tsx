@@ -62,7 +62,7 @@ export default function Search() {
 
   const { selectedKB, isDefaultSelected } = useKnowledgeBase();
   const { accessToken } = useAuth();
-  const { data: defaultStats } = useStats();
+  const { data: defaultStats } = useStats(accessToken || undefined);
 
   // Job stats for non-default KB
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
@@ -107,7 +107,7 @@ export default function Search() {
           n_results: 10,
           phase_filter: phaseFilter || undefined,
           topic_filter: topicFilter || undefined,
-        });
+        }, accessToken || undefined);
 
         setResults(searchResults.map(r => ({
           doc_id: r.doc_id,

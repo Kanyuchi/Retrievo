@@ -40,8 +40,8 @@ function useApiCall<T>(fetchFn: () => Promise<T>, deps: unknown[] = []) {
 }
 
 // Hook for stats
-export function useStats() {
-  return useApiCall(() => api.getStats(), []);
+export function useStats(accessToken?: string) {
+  return useApiCall(() => api.getStats(accessToken), [accessToken]);
 }
 
 // Hook for papers
@@ -49,16 +49,17 @@ export function usePapers(params?: {
   phase_filter?: string;
   topic_filter?: string;
   limit?: number;
-}) {
-  return useApiCall(() => api.getPapers(params), [
+}, accessToken?: string) {
+  return useApiCall(() => api.getPapers(params, accessToken), [
     params?.phase_filter,
     params?.topic_filter,
     params?.limit,
+    accessToken,
   ]);
 }
 
 // Hook for search
-export function useSearch() {
+export function useSearch(accessToken?: string) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function useSearch() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.search(params);
+      const data = await api.search(params, accessToken);
       setResults(data);
       return data;
     } catch (err) {
@@ -84,13 +85,13 @@ export function useSearch() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   return { results, loading, error, search };
 }
 
 // Hook for query (chat)
-export function useQuery() {
+export function useQuery(accessToken?: string) {
   const [response, setResponse] = useState<ChatResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +100,7 @@ export function useQuery() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.query(request);
+      const data = await api.query(request, accessToken);
       setResponse(data);
       return data;
     } catch (err) {
@@ -109,7 +110,7 @@ export function useQuery() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   return { response, loading, error, query };
 }
