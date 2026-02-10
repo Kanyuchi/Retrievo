@@ -309,9 +309,18 @@ async def csrf_protection_middleware(request: Request, call_next):
         if request.url.path not in _CSRF_EXEMPT_PATHS:
             header_token = request.headers.get(_CSRF_HEADER_NAME)
             if not header_token or header_token != csrf_cookie:
+                # Include CORS headers in error response
+                origin = request.headers.get("origin", "")
+                cors_headers = {}
+                if origin in config_temp.api.cors_origins:
+                    cors_headers = {
+                        "Access-Control-Allow-Origin": origin,
+                        "Access-Control-Allow-Credentials": "true",
+                    }
                 return JSONResponse(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    content={"error": "CSRF validation failed"}
+                    content={"error": "CSRF validation failed"},
+                    headers=cors_headers
                 )
 
     response = await call_next(request)
