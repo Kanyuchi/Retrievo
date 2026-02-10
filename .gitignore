@@ -44,3 +44,6 @@ Thumbs.db
 # PDF source files (large)
 Phase */
 *.pdf
+
+# SSH keys (never commit)
+.keys/

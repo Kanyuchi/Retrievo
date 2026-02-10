@@ -79,3 +79,48 @@ source venv/bin/activate
 python -m literature_rag.api
 ```
 API runs on http://localhost:8001
+
+---
+
+## Production Deployment
+
+### SSH Key Location
+**IMPORTANT:** The SSH key for production server is stored at:
+```
+.keys/lightsail.pem
+```
+
+This key is gitignored and must NEVER be committed. Always use this key when deploying.
+
+### Production Server
+- **Host**: `13.49.191.201`
+- **User**: `ubuntu`
+- **App Directory**: `~/lit-rag-api`
+
+### Deploy Backend
+```bash
+ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd lit-rag-api && git pull origin main && docker compose down && docker compose up -d --build"
+```
+
+### Deploy Frontend
+```bash
+cd webapp && npm run build
+scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/lit-rag-api/webapp-dist/
+```
+
+### View Logs
+```bash
+ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd lit-rag-api && docker compose logs -f --tail=100"
+```
+
+---
+
+## Dependency Management Rule
+
+**IMPORTANT:** When a process requires credentials, keys, or configuration files:
+1. Store them in a predictable project location (e.g., `.keys/`, `.config/`)
+2. Add to `.gitignore` to prevent accidental commits
+3. Document the location in this file
+4. Use the stored dependency automatically without asking the user each time
+
+This applies to: SSH keys, API keys, certificates, configuration files, and any other dependencies needed for automated processes
