@@ -43,6 +43,7 @@ import { api } from '@/lib/api';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { UploadConfigResponse, TaskStatusResponse, JobDocument } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -82,6 +83,7 @@ interface DisplayDocument {
 export default function Files() {
   const { selectedKB, isDefaultSelected, refreshKBs } = useKnowledgeBase();
   const { accessToken } = useAuth();
+  const { t } = useTranslation();
 
   // State
   const [documents, setDocuments] = useState<DisplayDocument[]>([]);
@@ -159,7 +161,7 @@ export default function Files() {
       }
     } catch (error) {
       console.error('Failed to load documents:', error);
-      toast.error('Failed to load documents');
+      toast.error(t('files.load_failed'));
     } finally {
       setLoading(false);
     }
@@ -217,7 +219,7 @@ export default function Files() {
       setSelectedFile(pdfFile);
       setUploadDialogOpen(true);
     } else {
-      toast.error('Please drop a PDF file');
+      toast.error(t('files.drop_pdf'));
     }
   }, []);
 
@@ -228,7 +230,7 @@ export default function Files() {
         setSelectedFile(file);
         setUploadDialogOpen(true);
       } else {
-        toast.error('Please select a PDF file');
+        toast.error(t('files.select_file'));
       }
     }
     // Reset input
@@ -239,20 +241,20 @@ export default function Files() {
 
   const handleUpload = async () => {
     if (!selectedFile || !selectedPhase || !selectedKB) {
-      toast.error('Please select a file and phase');
+      toast.error(t('files.select_file'));
       return;
     }
 
     const topic = customTopic || selectedTopic;
     if (!topic) {
-      toast.error('Please select or enter a topic');
+      toast.error(t('files.select_topic_error'));
       return;
     }
 
     try {
       setUploading(true);
       setUploadProgress(0);
-      setUploadMessage('Uploading file...');
+      setUploadMessage(t('files.uploading'));
 
       if (isDefaultSelected) {
         // Upload to default collection (async with polling)
@@ -264,7 +266,7 @@ export default function Files() {
         );
 
         setUploadProgress(10);
-        setUploadMessage('Processing started...');
+        setUploadMessage(t('files.upload_progress'));
 
         // Poll for status updates
         const finalStatus = await api.pollUploadStatus(
@@ -279,21 +281,21 @@ export default function Files() {
         );
 
         if (finalStatus.status === 'completed' && finalStatus.result) {
-          toast.success(`Successfully indexed ${finalStatus.result.filename}`, {
-            description: `${finalStatus.result.chunks_indexed} chunks created`,
+          toast.success(t('files.upload_success', { name: finalStatus.result.filename }), {
+            description: `${finalStatus.result.chunks_indexed} ${t('kb.chunks')}`,
           });
           setUploadDialogOpen(false);
           resetUploadForm();
           loadDocuments();
         } else if (finalStatus.status === 'failed') {
-          toast.error('Upload failed', {
-            description: finalStatus.error || 'Unknown error',
+          toast.error(t('files.upload_failed'), {
+            description: finalStatus.error || t('common.unknown_error'),
           });
         }
       } else {
         // Upload to job collection (synchronous)
         setUploadProgress(20);
-        setUploadMessage('Processing PDF...');
+        setUploadMessage(t('files.processing'));
 
         const response = await api.uploadToJob(
           selectedKB.id as number,
@@ -304,8 +306,8 @@ export default function Files() {
         );
 
         setUploadProgress(100);
-        toast.success(`Successfully uploaded ${selectedFile.name}`, {
-          description: response.message || 'Document indexed successfully',
+        toast.success(t('files.upload_success', { name: selectedFile.name }), {
+          description: response.message || t('files.upload_index'),
         });
         setUploadDialogOpen(false);
         resetUploadForm();
@@ -314,8 +316,8 @@ export default function Files() {
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Upload failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+      toast.error(t('files.upload_failed'), {
+        description: error instanceof Error ? error.message : t('common.unknown_error'),
       });
     } finally {
       setUploading(false);
@@ -346,12 +348,12 @@ export default function Files() {
       if (isDefaultSelected) {
         const result = await api.deleteDocument(documentToDelete.doc_id, accessToken || undefined);
         if (result.success) {
-          toast.success('Document deleted', {
-            description: `Removed ${result.chunks_deleted} chunks`,
+          toast.success(t('common.delete'), {
+            description: `Removed ${result.chunks_deleted} ${t('kb.chunks')}`,
           });
         } else {
-          toast.error('Delete failed', {
-            description: result.error || 'Unknown error',
+          toast.error(t('common.delete'), {
+            description: result.error || t('common.unknown_error'),
           });
           return;
         }
@@ -361,8 +363,8 @@ export default function Files() {
           documentToDelete.doc_id,
           accessToken || undefined
         );
-        toast.success('Document deleted', {
-          description: `Removed ${result.chunks_deleted} chunks`,
+        toast.success(t('common.delete'), {
+          description: `Removed ${result.chunks_deleted} ${t('kb.chunks')}`,
         });
       }
 
@@ -372,8 +374,8 @@ export default function Files() {
       refreshKBs(); // Refresh KB list to update counts
     } catch (error) {
       console.error('Delete error:', error);
-      toast.error('Delete failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+      toast.error(t('common.delete'), {
+        description: error instanceof Error ? error.message : t('common.unknown_error'),
       });
     } finally {
       setDeleting(false);
@@ -400,8 +402,8 @@ export default function Files() {
   );
 
   const formatFileSize = (pages?: number, chunks?: number) => {
-    if (pages) return `${pages} pages`;
-    if (chunks) return `${chunks} chunks`;
+    if (pages) return `${pages} ${t('common.pages')}`;
+    if (chunks) return `${chunks} ${t('kb.chunks')}`;
     return '-';
   };
 
@@ -430,8 +432,8 @@ export default function Files() {
         <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-card border-2 border-dashed border-primary rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 text-primary mx-auto mb-4" />
-            <p className="text-xl font-semibold text-foreground">Drop PDF here</p>
-            <p className="text-muted-foreground mt-2">to upload to {selectedKB?.name}</p>
+            <p className="text-xl font-semibold text-foreground">{t('files.drop_here')}</p>
+            <p className="text-muted-foreground mt-2">{t('files.to_upload_to', { name: selectedKB?.name })}</p>
           </div>
         </div>
       )}
@@ -447,7 +449,7 @@ export default function Files() {
               <FolderOpen className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">Files</h1>
+              <h1 className="text-2xl font-semibold text-white">{t('files.title')}</h1>
               {/* Show which KB is being viewed */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {isDefaultSelected ? (
@@ -455,7 +457,7 @@ export default function Files() {
                 ) : (
                   <Folder className="w-3 h-3" />
                 )}
-                <span>{selectedKB?.name} · {documents.length} documents</span>
+                <span>{selectedKB?.name} · {documents.length} {t('kb.docs')}</span>
               </div>
             </div>
           </div>
@@ -464,7 +466,7 @@ export default function Files() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search documents..."
+                placeholder={t('files.search_documents')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 w-[200px] bg-secondary/50 border-border focus:border-primary"
@@ -485,7 +487,7 @@ export default function Files() {
               disabled={!canUpload}
             >
               <Upload className="w-4 h-4" />
-              Add file
+              {t('common.upload')}
             </Button>
           </div>
         </motion.div>
@@ -499,12 +501,12 @@ export default function Files() {
                   <TableHead className="w-12">
                     <Checkbox className="border-border" />
                   </TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Name</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Phase</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Topic</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Year</TableHead>
-                  <TableHead className="text-muted-foreground font-medium">Size</TableHead>
-                  <TableHead className="text-muted-foreground font-medium text-right">Action</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">{t('files.table_name')}</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">{t('files.table_phase')}</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">{t('files.table_topic')}</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">{t('files.table_year')}</TableHead>
+                  <TableHead className="text-muted-foreground font-medium">{t('files.table_size')}</TableHead>
+                  <TableHead className="text-muted-foreground font-medium text-right">{t('files.table_action')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -512,7 +514,7 @@ export default function Files() {
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12">
                       <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mx-auto" />
-                      <p className="text-muted-foreground mt-2">Loading documents...</p>
+                      <p className="text-muted-foreground mt-2">{t('files.loading_documents')}</p>
                     </TableCell>
                   </TableRow>
                 ) : paginatedDocuments.length === 0 ? (
@@ -520,7 +522,7 @@ export default function Files() {
                     <TableCell colSpan={7} className="text-center py-12">
                       <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground">
-                        {searchQuery ? 'No documents match your search' : 'No documents yet'}
+                        {searchQuery ? t('files.no_match') : t('files.no_documents')}
                       </p>
                       {!searchQuery && canUpload && (
                         <Button
@@ -529,7 +531,7 @@ export default function Files() {
                           onClick={() => fileInputRef.current?.click()}
                         >
                           <Upload className="w-4 h-4 mr-2" />
-                          Upload your first PDF
+                          {t('files.upload_first')}
                         </Button>
                       )}
                     </TableCell>
@@ -585,7 +587,7 @@ export default function Files() {
           variants={itemVariants}
           className="flex items-center justify-end gap-4 mt-8 pt-4 border-t border-border"
         >
-          <span className="text-sm text-muted-foreground">Total {filteredDocuments.length}</span>
+          <span className="text-sm text-muted-foreground">{t('files.total', { count: filteredDocuments.length })}</span>
 
           <div className="flex items-center gap-2">
             <Button
@@ -614,13 +616,13 @@ export default function Files() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
-                {itemsPerPage} / Page <ChevronLeft className="w-4 h-4 rotate-90" />
+                {t('files.per_page', { count: itemsPerPage })} <ChevronLeft className="w-4 h-4 rotate-90" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card border-border">
               {[10, 20, 50, 100].map(num => (
                 <DropdownMenuItem key={num} onClick={() => setItemsPerPage(num)}>
-                  {num} / Page
+                  {t('files.per_page', { count: num })}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -632,9 +634,9 @@ export default function Files() {
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Upload PDF to {selectedKB?.name}</DialogTitle>
+            <DialogTitle>{t('files.upload_dialog_title', { name: selectedKB?.name })}</DialogTitle>
             <DialogDescription>
-              Select phase and topic for the document to be indexed properly.
+              {t('files.upload_description')}
             </DialogDescription>
           </DialogHeader>
 
@@ -662,10 +664,10 @@ export default function Files() {
 
             {/* Phase selection */}
             <div className="space-y-2">
-              <Label>Phase *</Label>
+              <Label>{t('files.phase_label')} *</Label>
               <Select value={selectedPhase} onValueChange={setSelectedPhase} disabled={uploading}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a phase" />
+                  <SelectValue placeholder={t('files.select_phase')} />
                 </SelectTrigger>
                 <SelectContent>
                   {availablePhases.map(phase => (
@@ -679,10 +681,10 @@ export default function Files() {
 
             {/* Topic selection */}
             <div className="space-y-2">
-              <Label>Topic *</Label>
+              <Label>{t('files.topic_label')} *</Label>
               <Select value={selectedTopic} onValueChange={setSelectedTopic} disabled={uploading}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select existing topic or enter new" />
+                  <SelectValue placeholder={t('files.select_topic_placeholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableTopics.map(topic => (
@@ -692,9 +694,9 @@ export default function Files() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="text-xs text-muted-foreground">or enter a new topic:</div>
+              <div className="text-xs text-muted-foreground">{t('files.enter_new_topic_label')}</div>
               <Input
-                placeholder="Enter new topic name..."
+                placeholder={t('files.enter_new_topic_placeholder')}
                 value={customTopic}
                 onChange={(e) => setCustomTopic(e.target.value)}
                 disabled={uploading}
@@ -705,7 +707,7 @@ export default function Files() {
             {uploading && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{uploadMessage || 'Processing...'}</span>
+                  <span className="text-muted-foreground">{uploadMessage || t('files.processing')}</span>
                   <span className="text-foreground">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
@@ -722,7 +724,7 @@ export default function Files() {
               }}
               disabled={uploading}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleUpload}
@@ -731,12 +733,12 @@ export default function Files() {
               {uploading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading...
+                  {t('files.uploading')}
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload & Index
+                  {t('files.upload_index')}
                 </>
               )}
             </Button>
@@ -750,10 +752,10 @@ export default function Files() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-400">
               <AlertCircle className="w-5 h-5" />
-              Delete Document
+              {t('files.delete_title')}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this document? This will remove all indexed chunks from the knowledge base.
+              {t('files.delete_confirm', { name: documentToDelete?.title || documentToDelete?.filename || '' })}
             </DialogDescription>
           </DialogHeader>
 
@@ -782,7 +784,7 @@ export default function Files() {
               }}
               disabled={deleting}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -792,12 +794,12 @@ export default function Files() {
               {deleting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
+                  {t('jobs.deleting')}
                 </>
               ) : (
                 <>
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
+                  {t('common.delete')}
                 </>
               )}
             </Button>

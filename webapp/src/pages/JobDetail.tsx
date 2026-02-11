@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import type { Job, JobDocument, JobStats, UploadConfigResponse } from '../lib/api';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   Upload,
@@ -35,6 +36,7 @@ export default function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
+  const { t } = useTranslation();
 
   const [job, setJob] = useState<Job | null>(null);
   const [documents, setDocuments] = useState<JobDocument[]>([]);
@@ -99,7 +101,7 @@ export default function JobDetail() {
         setUploadPhase(configData.phases[0].name);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load job');
+      setError(err instanceof Error ? err.message : t('job_detail.not_found'));
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +166,7 @@ export default function JobDetail() {
         );
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+          const errorData = await response.json().catch(() => ({ detail: t('files.upload_failed') }));
           throw new Error(errorData.detail || `HTTP ${response.status}`);
         }
 
@@ -180,7 +182,7 @@ export default function JobDetail() {
       } catch (err) {
         updateQueueItem(item.id, {
           status: 'failed',
-          error: err instanceof Error ? err.message : 'Upload failed',
+          error: err instanceof Error ? err.message : t('files.upload_failed'),
         });
       }
     }
@@ -269,7 +271,7 @@ export default function JobDetail() {
   );
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -298,15 +300,15 @@ export default function JobDetail() {
         <div className="max-w-xl mx-auto">
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-destructive mb-2">
-              Error Loading Job
+              {t('job_detail.not_found')}
             </h2>
-            <p className="text-destructive/80">{error || 'Job not found'}</p>
+            <p className="text-destructive/80">{error || t('job_detail.not_found')}</p>
             <Link
               to="/jobs"
               className="inline-flex items-center gap-2 mt-4 text-primary hover:text-primary/80"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Jobs
+              {t('job_detail.back_to_jobs')}
             </Link>
           </div>
         </div>
@@ -348,22 +350,22 @@ export default function JobDetail() {
                 }`}
               >
                 <MessageSquare className="h-5 w-5" />
-                Query
+                {t('job_detail.query_title')}
               </button>
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="flex items-center gap-2 px-4 py-2 text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
-                title="Clear all documents from this knowledge base"
+                title={t('job_detail.clear_title')}
               >
                 <Trash2 className="h-5 w-5" />
-                Clear
+                {t('job_detail.clear_title')}
               </button>
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
                 <Upload className="h-5 w-5" />
-                Upload PDF
+                {t('job_detail.upload_pdf')}
               </button>
             </div>
           </div>
@@ -386,7 +388,7 @@ export default function JobDetail() {
                       <p className="text-2xl font-bold text-foreground">
                         {stats.document_count}
                       </p>
-                      <p className="text-sm text-muted-foreground">Documents</p>
+                      <p className="text-sm text-muted-foreground">{t('job_detail.documents_label')}</p>
                     </div>
                   </div>
                 </div>
@@ -399,7 +401,7 @@ export default function JobDetail() {
                       <p className="text-2xl font-bold text-foreground">
                         {stats.chunk_count}
                       </p>
-                      <p className="text-sm text-muted-foreground">Chunks</p>
+                      <p className="text-sm text-muted-foreground">{t('job_detail.chunks_label')}</p>
                     </div>
                   </div>
                 </div>
@@ -412,7 +414,7 @@ export default function JobDetail() {
                       <p className="text-2xl font-bold text-foreground">
                         {Object.keys(stats.topics).length}
                       </p>
-                      <p className="text-sm text-muted-foreground">Topics</p>
+                      <p className="text-sm text-muted-foreground">{t('job_detail.topics_label')}</p>
                     </div>
                   </div>
                 </div>
@@ -425,7 +427,7 @@ export default function JobDetail() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Search documents..."
+                  placeholder={t('job_detail.search_documents')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -438,17 +440,17 @@ export default function JobDetail() {
               <div className="text-center py-12 bg-card border border-border rounded-lg">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  No documents yet
+                  {t('job_detail.no_documents')}
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Upload your first PDF to get started.
+                  {t('job_detail.upload_first_pdf')}
                 </p>
                 <button
                   onClick={() => setShowUploadModal(true)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   <Upload className="h-5 w-5" />
-                  Upload PDF
+                  {t('job_detail.upload_pdf')}
                 </button>
               </div>
             ) : (
@@ -457,19 +459,19 @@ export default function JobDetail() {
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Document
+                        {t('job_detail.table_document')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Phase / Topic
+                        {t('job_detail.table_phase_topic')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Chunks
+                        {t('job_detail.table_chunks')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Added
+                        {t('job_detail.table_added')}
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Actions
+                        {t('job_detail.table_actions')}
                       </th>
                     </tr>
                   </thead>
@@ -528,7 +530,7 @@ export default function JobDetail() {
           {showQueryPanel && (
             <div className="w-96 bg-card border border-border rounded-lg p-4 h-fit sticky top-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">Query Knowledge Base</h3>
+                <h3 className="font-semibold text-foreground">{t('job_detail.query_title')}</h3>
                 <button
                   onClick={() => setShowQueryPanel(false)}
                   className="text-muted-foreground hover:text-foreground"
@@ -541,7 +543,7 @@ export default function JobDetail() {
                 <textarea
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
-                  placeholder="Ask a question about your documents..."
+                  placeholder={t('job_detail.query_placeholder')}
                   rows={4}
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                 />
@@ -554,12 +556,12 @@ export default function JobDetail() {
                   {isQuerying ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Querying...
+                      {t('common.search')}...
                     </>
                   ) : (
                     <>
                       <MessageSquare className="h-4 w-4" />
-                      Ask Question
+                      {t('job_detail.query_button')}
                     </>
                   )}
                 </button>
@@ -583,14 +585,14 @@ export default function JobDetail() {
           <div className="absolute inset-0 bg-black/50" onClick={closeUploadModal} />
           <div className="relative bg-card border border-border rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-semibold text-foreground mb-4">
-              Upload PDFs
+              {t('job_detail.upload_pdfs')}
             </h2>
 
             <div className="space-y-4">
               {/* Phase Select */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Phase
+                  {t('job_detail.phase_label')}
                 </label>
                 <select
                   value={uploadPhase}
@@ -609,13 +611,13 @@ export default function JobDetail() {
               {/* Topic Input */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Topic
+                  {t('job_detail.topic_label')}
                 </label>
                 <input
                   type="text"
                   value={uploadTopic}
                   onChange={(e) => setUploadTopic(e.target.value)}
-                  placeholder="e.g., Business Formation"
+                  placeholder={t('job_detail.topic_placeholder')}
                   disabled={isUploading}
                   list="existing-topics"
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground"
@@ -630,14 +632,14 @@ export default function JobDetail() {
               {/* File Input */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  PDF Files
+                  {t('job_detail.upload_pdf')}
                 </label>
                 <div className="flex items-center gap-2">
                   <label className="flex-1 cursor-pointer">
                     <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-border rounded-lg hover:border-primary/50 transition-colors">
                       <Plus className="h-5 w-5 text-muted-foreground" />
                       <span className="text-muted-foreground">
-                        {uploadQueue.length === 0 ? 'Select PDF files' : 'Add more files'}
+                        {uploadQueue.length === 0 ? t('job_detail.select_files') : t('job_detail.add_more_files')}
                       </span>
                     </div>
                     <input
@@ -656,7 +658,7 @@ export default function JobDetail() {
               {uploadQueue.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">
-                    Files ({uploadQueue.length})
+                    {t('job_detail.files_count', { count: uploadQueue.length })}
                   </p>
                   <div className="max-h-48 overflow-y-auto space-y-2">
                     {uploadQueue.map((item) => (
@@ -690,7 +692,7 @@ export default function JobDetail() {
                           )}
                           {item.status === 'completed' && item.result && (
                             <p className="text-xs text-green-500">
-                              {item.result.chunks_indexed} chunks indexed
+                              {item.result.chunks_indexed} {t('kb.chunks')}
                             </p>
                           )}
                         </div>
@@ -712,8 +714,8 @@ export default function JobDetail() {
               {isUploading && (
                 <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
                   <p className="text-sm text-foreground">
-                    Uploading... {completedUploads}/{uploadQueue.length} complete
-                    {failedUploads > 0 && `, ${failedUploads} failed`}
+                    {t('job_detail.uploading_progress', { completed: completedUploads, total: uploadQueue.length })}
+                    {failedUploads > 0 && t('job_detail.failed_count', { failed: failedUploads })}
                   </p>
                 </div>
               )}
@@ -724,7 +726,7 @@ export default function JobDetail() {
                   disabled={isUploading}
                   className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {pendingUploads === 0 && completedUploads > 0 ? 'Done' : 'Cancel'}
+                  {pendingUploads === 0 && completedUploads > 0 ? t('job_detail.done') : t('job_detail.cancel')}
                 </button>
                 {pendingUploads > 0 && (
                   <button
@@ -732,7 +734,11 @@ export default function JobDetail() {
                     disabled={!uploadPhase || !uploadTopic || uploadQueue.length === 0 || isUploading}
                     className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {isUploading ? 'Uploading...' : `Upload ${uploadQueue.length} file${uploadQueue.length > 1 ? 's' : ''}`}
+                    {isUploading
+                      ? t('files.uploading')
+                      : uploadQueue.length > 1
+                      ? t('job_detail.upload_button_plural', { count: uploadQueue.length })
+                      : t('job_detail.upload_button', { count: uploadQueue.length })}
                   </button>
                 )}
               </div>
@@ -751,13 +757,13 @@ export default function JobDetail() {
                 <AlertCircle className="h-6 w-6 text-destructive" />
               </div>
               <h2 className="text-xl font-semibold text-foreground">
-                Delete Document
+                {t('job_detail.delete_doc_title')}
               </h2>
             </div>
 
             <p className="text-muted-foreground mb-6">
-              Are you sure you want to delete <strong className="text-foreground">"{deleteDoc.title || deleteDoc.filename}"</strong>?
-              This will remove all {deleteDoc.chunk_count} indexed chunks.
+              {t('job_detail.delete_doc_confirm', { name: deleteDoc.title || deleteDoc.filename })}{' '}
+              {deleteDoc.chunk_count} {t('kb.chunks')}
             </p>
 
             <div className="flex justify-end gap-3">
@@ -766,14 +772,14 @@ export default function JobDetail() {
                 disabled={isDeleting}
                 className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleDeleteDocument}
                 disabled={isDeleting}
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isDeleting ? 'Deleting...' : 'Delete'}
+                {isDeleting ? t('jobs.deleting') : t('common.delete')}
               </button>
             </div>
           </div>
@@ -790,17 +796,15 @@ export default function JobDetail() {
                 <AlertCircle className="h-6 w-6 text-destructive" />
               </div>
               <h2 className="text-xl font-semibold text-foreground">
-                Clear Knowledge Base
+                {t('job_detail.clear_title')}
               </h2>
             </div>
 
             <p className="text-muted-foreground mb-4">
-              Are you sure you want to clear all documents from this knowledge base?
+              {t('job_detail.clear_title')}
             </p>
             <p className="text-muted-foreground mb-6">
-              This will delete <strong className="text-foreground">{documents.length} documents</strong> and{' '}
-              <strong className="text-foreground">{stats?.chunk_count || 0} chunks</strong>.
-              The knowledge base itself will be preserved, allowing you to upload new documents.
+              {t('job_detail.clear_confirm', { documents: documents.length, chunks: stats?.chunk_count || 0 })}
             </p>
 
             <div className="flex justify-end gap-3">
@@ -809,14 +813,14 @@ export default function JobDetail() {
                 disabled={isClearing}
                 className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleClearKnowledgeBase}
                 disabled={isClearing}
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isClearing ? 'Clearing...' : 'Clear All'}
+                {isClearing ? t('jobs.deleting') : t('job_detail.clear_title')}
               </button>
             </div>
           </div>

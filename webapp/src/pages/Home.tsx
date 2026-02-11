@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import type { Job } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -36,6 +37,7 @@ export default function Home() {
   const { data: stats, loading, error } = useStats(accessToken || undefined);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const { t } = useTranslation();
 
   // Load user's jobs if authenticated
   const loadJobs = useCallback(async () => {
@@ -74,12 +76,12 @@ export default function Home() {
         {/* Hero Section */}
         <motion.section variants={itemVariants} className="mb-16">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
-            Welcome to <span className="gradient-text">Retrievo</span>
+            {t('home.welcome')} <span className="gradient-text">Retrievo</span>
           </h1>
           <p className="mt-4 text-muted-foreground text-lg">
             {isAuthenticated
-              ? `Hello, ${user?.name || user?.email?.split('@')[0] || 'Researcher'}! Manage your knowledge bases.`
-              : 'Intelligent Knowledge Retrieval Platform'}
+              ? t('home.hello', { name: user?.name || user?.email?.split('@')[0] || 'Researcher' })
+              : t('home.guest_subtitle')}
           </p>
         </motion.section>
 
@@ -99,14 +101,14 @@ export default function Home() {
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Briefcase className="w-5 h-5 text-primary" />
                   </div>
-                  <h2 className="text-2xl font-semibold text-white">Your Knowledge Bases</h2>
+                  <h2 className="text-2xl font-semibold text-white">{t('home.your_kbs')}</h2>
                 </div>
                 <Link
                   to="/jobs"
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  New
+                  {t('home.new')}
                 </Link>
               </div>
 
@@ -114,17 +116,17 @@ export default function Home() {
                 <Card className="p-8 bg-card border-border text-center">
                   <Folder className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">
-                    No knowledge bases yet
+                    {t('home.no_kb_yet')}
                   </h3>
                   <p className="text-muted-foreground mb-4">
-                    Create your first knowledge base to start uploading and querying your own documents.
+                    {t('home.create_first_kb')}
                   </p>
                   <Link
                     to="/jobs"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
-                    Create Knowledge Base
+                    {t('home.create_kb')}
                   </Link>
                 </Card>
               ) : (
@@ -134,21 +136,21 @@ export default function Home() {
                     <Card className="p-6 bg-card border-border">
                       <div className="flex items-center gap-3 mb-2">
                         <Folder className="w-5 h-5 text-primary" />
-                        <span className="text-muted-foreground text-sm">Knowledge Bases</span>
+                        <span className="text-muted-foreground text-sm">{t('home.stats_kbs')}</span>
                       </div>
                       <p className="text-3xl font-bold text-white">{jobs.length}</p>
                     </Card>
                     <Card className="p-6 bg-card border-border">
                       <div className="flex items-center gap-3 mb-2">
                         <FileText className="w-5 h-5 text-primary" />
-                        <span className="text-muted-foreground text-sm">Total Documents</span>
+                        <span className="text-muted-foreground text-sm">{t('home.stats_docs')}</span>
                       </div>
                       <p className="text-3xl font-bold text-white">{userTotalDocs}</p>
                     </Card>
                     <Card className="p-6 bg-card border-border">
                       <div className="flex items-center gap-3 mb-2">
                         <Layers className="w-5 h-5 text-primary" />
-                        <span className="text-muted-foreground text-sm">Total Chunks</span>
+                        <span className="text-muted-foreground text-sm">{t('home.stats_chunks')}</span>
                       </div>
                       <p className="text-3xl font-bold text-white">{userTotalChunks.toLocaleString()}</p>
                     </Card>
@@ -176,8 +178,8 @@ export default function Home() {
                             <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{job.document_count} docs</span>
-                            <span>{job.chunk_count} chunks</span>
+                            <span>{job.document_count} {t('kb.docs')}</span>
+                            <span>{job.chunk_count} {t('kb.chunks')}</span>
                           </div>
                         </Card>
                       </Link>
@@ -187,9 +189,9 @@ export default function Home() {
                         <Card className="p-5 bg-card border-border hover:border-primary/50 transition-colors cursor-pointer flex items-center justify-center h-full min-h-[120px]">
                           <div className="text-center">
                             <p className="text-muted-foreground">
-                              +{jobs.length - 3} more
+                              {t('home.more', { count: jobs.length - 3 })}
                             </p>
-                            <p className="text-sm text-primary mt-1">View all</p>
+                            <p className="text-sm text-primary mt-1">{t('home.view_all')}</p>
                           </div>
                         </Card>
                       </Link>

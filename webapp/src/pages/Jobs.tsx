@@ -13,6 +13,7 @@ import {
   ChevronRight,
   AlertCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface CreateJobModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
   const [description, setDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +41,7 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
       setDescription('');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create job');
+      setError(err instanceof Error ? err.message : t('jobs.create_failed'));
     } finally {
       setIsCreating(false);
     }
@@ -52,7 +54,7 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-card border border-border rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">
-          Create New Knowledge Base
+          {t('jobs.create_title')}
         </h2>
 
         {error && (
@@ -64,13 +66,13 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              Name *
+              {t('jobs.name_label')}
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Research Project"
+              placeholder={t('jobs.name_placeholder')}
               className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
               autoFocus
             />
@@ -78,12 +80,12 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              Description
+              {t('jobs.description_label')}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of this knowledge base..."
+              placeholder={t('jobs.description_placeholder')}
               rows={3}
               className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
             />
@@ -95,14 +97,14 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
               onClick={onClose}
               className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={!name.trim() || isCreating}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isCreating ? 'Creating...' : 'Create'}
+              {isCreating ? t('jobs.creating') : t('common.create')}
             </button>
           </div>
         </form>
@@ -119,6 +121,7 @@ interface DeleteConfirmModalProps {
 
 function DeleteConfirmModal({ job, onClose, onConfirm }: DeleteConfirmModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const { t } = useTranslation();
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -141,14 +144,16 @@ function DeleteConfirmModal({ job, onClose, onConfirm }: DeleteConfirmModalProps
             <AlertCircle className="h-6 w-6 text-destructive" />
           </div>
           <h2 className="text-xl font-semibold text-foreground">
-            Delete Knowledge Base
+            {t('jobs.delete_title')}
           </h2>
         </div>
 
         <p className="text-muted-foreground mb-6">
-          Are you sure you want to delete <strong className="text-foreground">"{job.name}"</strong>? This will permanently
-          delete all {job.document_count} documents and {job.chunk_count} indexed chunks. This
-          action cannot be undone.
+          {t('jobs.delete_confirm', {
+            name: job.name,
+            documents: job.document_count,
+            chunks: job.chunk_count,
+          })}
         </p>
 
         <div className="flex justify-end gap-3">
@@ -156,14 +161,14 @@ function DeleteConfirmModal({ job, onClose, onConfirm }: DeleteConfirmModalProps
             onClick={onClose}
             className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleDelete}
             disabled={isDeleting}
             className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isDeleting ? t('jobs.deleting') : t('common.delete')}
           </button>
         </div>
       </div>
@@ -174,6 +179,7 @@ function DeleteConfirmModal({ job, onClose, onConfirm }: DeleteConfirmModalProps
 export default function Jobs() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,7 +205,7 @@ export default function Jobs() {
       const response = await api.listJobs(accessToken);
       setJobs(response.jobs);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load jobs');
+      setError(err instanceof Error ? err.message : t('jobs.load_failed'));
     } finally {
       setIsLoading(false);
     }
@@ -231,7 +237,7 @@ export default function Jobs() {
   );
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -257,7 +263,7 @@ export default function Jobs() {
                 Retrievo
               </Link>
               <h1 className="text-lg text-muted-foreground mt-1">
-                Knowledge Bases
+                {t('jobs.title')}
               </h1>
             </div>
             <button
@@ -265,7 +271,7 @@ export default function Jobs() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-5 w-5" />
-              New Knowledge Base
+              {t('jobs.new_kb')}
             </button>
           </div>
         </div>
@@ -278,7 +284,7 @@ export default function Jobs() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search knowledge bases..."
+              placeholder={t('jobs.search_placeholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -305,17 +311,17 @@ export default function Jobs() {
           <div className="text-center py-12">
             <Folder className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              No knowledge bases yet
+              {t('jobs.empty_title')}
             </h3>
             <p className="text-muted-foreground mb-6">
-              Create your first knowledge base to start uploading documents.
+              {t('jobs.empty_subtitle')}
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-5 w-5" />
-              Create Knowledge Base
+              {t('jobs.empty_action')}
             </button>
           </div>
         )}
@@ -355,7 +361,7 @@ export default function Jobs() {
                           className="w-full flex items-center gap-2 px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg"
                         >
                           <Trash2 className="h-4 w-4" />
-                          Delete
+                          {t('common.delete')}
                         </button>
                       </div>
                     </>
@@ -382,14 +388,14 @@ export default function Jobs() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <FileText className="h-4 w-4" />
-                      {job.document_count} docs
+                      {job.document_count} {t('kb.docs')}
                     </span>
-                    <span>{job.chunk_count} chunks</span>
+                    <span>{job.chunk_count} {t('kb.chunks')}</span>
                   </div>
 
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                     <span className="text-xs text-muted-foreground">
-                      Created {formatDate(job.created_at)}
+                      {t('jobs.created', { date: formatDate(job.created_at) })}
                     </span>
                     <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
@@ -404,10 +410,10 @@ export default function Jobs() {
           <div className="text-center py-12">
             <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              No matching knowledge bases
+              {t('jobs.no_results_title')}
             </h3>
             <p className="text-muted-foreground">
-              Try a different search term.
+              {t('jobs.no_results_subtitle')}
             </p>
           </div>
         )}
