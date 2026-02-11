@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import type { OAuthConfig } from '../lib/api';
+import { useTranslation } from 'react-i18next';
 
 type AuthMode = 'login' | 'register';
 
@@ -10,6 +11,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, register, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { t } = useTranslation();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -48,11 +50,11 @@ export default function Login() {
 
     if (mode === 'register') {
       if (password !== confirmPassword) {
-        setError('Passwords do not match');
+        setError(t('auth.password_mismatch'));
         return;
       }
       if (password.length < 8) {
-        setError('Password must be at least 8 characters');
+        setError(t('auth.password_length'));
         return;
       }
     }
@@ -68,7 +70,7 @@ export default function Login() {
       const redirectTo = searchParams.get('redirect') || '/jobs';
       navigate(redirectTo);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(err instanceof Error ? err.message : t('auth.auth_failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +84,7 @@ export default function Login() {
       const { auth_url } = await api.getOAuthUrl(provider);
       window.location.href = auth_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initiate OAuth');
+      setError(err instanceof Error ? err.message : t('auth.oauth_failed'));
       setOauthLoading(false);
     }
   };
@@ -106,7 +108,7 @@ export default function Login() {
             </span>
           </Link>
           <h2 className="mt-6 text-center text-2xl font-bold text-foreground">
-            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+            {mode === 'login' ? t('auth.sign_in_title') : t('auth.create_account_title')}
           </h2>
         </div>
 
@@ -145,7 +147,7 @@ export default function Login() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Continue with Google
+                {t('auth.continue_google')}
               </button>
             )}
 
@@ -163,7 +165,7 @@ export default function Login() {
                     d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"
                   />
                 </svg>
-                Continue with GitHub
+                {t('auth.continue_github')}
               </button>
             )}
 
@@ -173,7 +175,7 @@ export default function Login() {
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-background text-muted-foreground">
-                  Or continue with email
+                  {t('auth.or_continue_email')}
                 </span>
               </div>
             </div>
@@ -186,7 +188,7 @@ export default function Login() {
             {mode === 'register' && (
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-foreground">
-                  Name (optional)
+                  {t('auth.name_optional')}
                 </label>
                 <input
                   id="name"
@@ -203,7 +205,7 @@ export default function Login() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                Email address
+                {t('auth.email_address')}
               </label>
               <input
                 id="email"
@@ -220,7 +222,7 @@ export default function Login() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                Password
+                {t('auth.password')}
               </label>
               <input
                 id="password"
@@ -238,7 +240,7 @@ export default function Login() {
             {mode === 'register' && (
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
-                  Confirm Password
+                  {t('auth.confirm_password')}
                 </label>
                 <input
                   id="confirmPassword"
@@ -267,10 +269,10 @@ export default function Login() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  {mode === 'login' ? 'Signing in...' : 'Creating account...'}
+                  {mode === 'login' ? `${t('auth.sign_in')}...` : `${t('auth.create_account')}...`}
                 </span>
               ) : (
-                mode === 'login' ? 'Sign in' : 'Create account'
+                mode === 'login' ? t('auth.sign_in') : t('auth.create_account')
               )}
             </button>
           </div>
@@ -284,12 +286,12 @@ export default function Login() {
               setMode(mode === 'login' ? 'register' : 'login');
               setError(null);
             }}
-            className="text-sm text-primary hover:text-primary/80"
-          >
-            {mode === 'login'
-              ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
-          </button>
+          className="text-sm text-primary hover:text-primary/80"
+        >
+          {mode === 'login'
+            ? t('auth.dont_have_account')
+            : t('auth.already_have_account')}
+        </button>
         </div>
 
         {/* Back to home */}
@@ -298,7 +300,7 @@ export default function Login() {
             to="/"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            Back to home
+            {t('auth.back_home')}
           </Link>
         </div>
       </div>

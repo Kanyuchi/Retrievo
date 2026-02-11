@@ -9,6 +9,7 @@ import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import type { PipelineStats } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +70,7 @@ export default function Chat() {
   const { selectedKB, isDefaultSelected } = useKnowledgeBase();
   const { accessToken } = useAuth();
   const { data: defaultStats } = useStats(accessToken || undefined);
+  const { t } = useTranslation();
 
   // Job stats for non-default KB
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
@@ -123,7 +125,7 @@ export default function Chat() {
   const formatSessionTitle = (session: { title?: string | null; created_at: string; id: number }) => {
     if (session.title && session.title.trim().length > 0) return session.title;
     const created = new Date(session.created_at);
-    if (isNaN(created.getTime())) return `Session ${session.id}`;
+    if (isNaN(created.getTime())) return t('chat.session_label', { label: session.id });
     const formatted = created.toLocaleString(undefined, {
       year: 'numeric',
       month: 'short',
@@ -131,7 +133,7 @@ export default function Chat() {
       hour: '2-digit',
       minute: '2-digit',
     });
-    return `Session ${formatted}`;
+    return t('chat.session_label', { label: formatted });
   };
 
   const buildSessionTitle = (text: string) => {
@@ -394,7 +396,7 @@ export default function Chat() {
               <MessageSquare className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">Chat</h1>
+              <h1 className="text-2xl font-semibold text-white">{t('chat.title')}</h1>
               {/* Show which KB is being queried */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {isDefaultSelected ? (
@@ -402,9 +404,9 @@ export default function Chat() {
                 ) : (
                   <Folder className="w-3 h-3" />
                 )}
-                <span>Querying: {selectedKB?.name}</span>
+                <span>{t('chat.querying', { name: selectedKB?.name })}</span>
                 {!isDefaultSelected && (
-                  <span className="text-xs text-muted-foreground/70">History saved only in opened sessions</span>
+                  <span className="text-xs text-muted-foreground/70">{t('chat.history_saved')}</span>
                 )}
               </div>
             </div>
@@ -418,21 +420,21 @@ export default function Chat() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
                       <FolderOpen className="w-4 h-4" />
-                      {activeSession ? formatSessionTitle(activeSession) : 'Open Session'}
+                      {activeSession ? formatSessionTitle(activeSession) : t('chat.open_session')}
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-card border-border">
                     <DropdownMenuItem onClick={handleCreateSession} disabled={sessionLoading}>
                       <Plus className="w-4 h-4 mr-2" />
-                      New Session
+                      {t('chat.new_session')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleClearSession} disabled={!activeSession}>
-                      Clear Session
+                      {t('chat.clear_session')}
                     </DropdownMenuItem>
                     {sessions.length === 0 && (
                       <DropdownMenuItem disabled>
-                        No saved sessions
+                        {t('chat.no_saved_sessions')}
                       </DropdownMenuItem>
                     )}
                     {sessions.map((session) => (
@@ -449,7 +451,7 @@ export default function Chat() {
                   disabled={!activeSession}
                 >
                   <Download className="w-4 h-4" />
-                  Export
+                  {t('chat.export')}
                 </Button>
               </>
             )}
@@ -458,7 +460,7 @@ export default function Chat() {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-secondary/50">
               <Sparkles className={`w-4 h-4 ${deepAnalysis ? 'text-primary' : 'text-muted-foreground'}`} />
               <Label htmlFor="deep-analysis" className="text-sm cursor-pointer">
-                Deep Analysis
+                {t('chat.deep_analysis')}
               </Label>
               <Switch
                 id="deep-analysis"
@@ -492,12 +494,12 @@ export default function Chat() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
                     <Filter className="w-4 h-4" />
-                    {phaseFilter || 'Phase'}
+                    {phaseFilter || t('chat.phase')}
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border-border">
-                  <DropdownMenuItem onClick={() => setPhaseFilter('')}>All Phases</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setPhaseFilter('')}>{t('chat.phase')} ({t('common.all')})</DropdownMenuItem>
                   {phases.map(phase => (
                     <DropdownMenuItem key={phase} onClick={() => setPhaseFilter(phase)}>
                       {phase}
@@ -513,12 +515,12 @@ export default function Chat() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
                     <Filter className="w-4 h-4" />
-                    {topicFilter || 'Topic'}
+                    {topicFilter || t('chat.topic')}
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border-border">
-                  <DropdownMenuItem onClick={() => setTopicFilter('')}>All Topics</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTopicFilter('')}>{t('chat.topic')} ({t('common.all')})</DropdownMenuItem>
                   {topics.map(topic => (
                     <DropdownMenuItem key={topic} onClick={() => setTopicFilter(topic)}>
                       {topic}
@@ -537,15 +539,15 @@ export default function Chat() {
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                   <Bot className="w-16 h-16 mb-4 opacity-50" />
-                  <p className="text-lg font-medium">Start a conversation</p>
+                  <p className="text-lg font-medium">{t('chat.start_conversation')}</p>
                   <p className="text-sm text-center max-w-md mt-2">
                     {isDefaultSelected
-                      ? 'Ask questions about the academic literature in the demo collection'
-                      : `Ask questions about documents in "${selectedKB?.name}"`}
+                      ? t('chat.ask_default')
+                      : t('chat.ask_kb', { name: selectedKB?.name })}
                   </p>
                   {selectedKB && (
                     <p className="text-xs mt-4 text-muted-foreground/70">
-                      {selectedKB.document_count} documents · {selectedKB.chunk_count.toLocaleString()} chunks
+                      {t('chat.documents', { documents: selectedKB.document_count, chunks: selectedKB.chunk_count.toLocaleString() })}
                     </p>
                   )}
                 </div>
@@ -611,7 +613,7 @@ export default function Chat() {
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-secondary/50 hover:bg-secondary text-muted-foreground transition-colors"
                                 >
                                   <ChevronRight className={`w-3 h-3 transition-transform ${expandedStats === message.id ? 'rotate-90' : ''}`} />
-                                  Details
+                                  {t('chat.details')}
                                 </button>
                               )}
                             </div>
@@ -660,7 +662,7 @@ export default function Chat() {
 
                         {message.sources && message.sources.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-border/50">
-                            <span className="text-xs text-muted-foreground block mb-2">References:</span>
+                            <span className="text-xs text-muted-foreground block mb-2">{t('chat.references')}:</span>
                             <div className="space-y-1">
                               {message.sources.map((source, idx) => (
                                 <p key={idx} className="text-xs text-muted-foreground">
@@ -696,7 +698,7 @@ export default function Chat() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={`Ask a question about ${isDefaultSelected ? 'the literature' : selectedKB?.name}...`}
+                  placeholder={t('chat.ask_question', { name: isDefaultSelected ? t('chat.the_literature') : selectedKB?.name })}
                   className="flex-1 bg-secondary/50 border-border focus:border-primary"
                   disabled={loading}
                 />

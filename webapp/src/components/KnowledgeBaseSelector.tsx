@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, Database, Folder, Plus, Check, Loader2 } from 'lucide-react';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 export default function KnowledgeBaseSelector() {
   const { selectedKB, availableKBs, selectKB, isLoading } = useKnowledgeBase();
   const { isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
 
   if (!selectedKB) return null;
 
@@ -38,7 +40,7 @@ export default function KnowledgeBaseSelector() {
           />
           <div className="absolute top-full left-0 mt-1 w-72 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
             <div className="p-2 border-b border-border">
-              <p className="text-xs text-muted-foreground px-2">Select Knowledge Base</p>
+              <p className="text-xs text-muted-foreground px-2">{t('kb.select')}</p>
             </div>
 
             <div className="max-h-64 overflow-y-auto p-1">
@@ -63,7 +65,7 @@ export default function KnowledgeBaseSelector() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{kb.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {kb.document_count} docs · {kb.chunk_count.toLocaleString()} chunks
+                      {kb.document_count} {t('kb.docs')} · {kb.chunk_count.toLocaleString()} {t('kb.chunks')}
                     </p>
                   </div>
                   {selectedKB.id === kb.id && (
@@ -81,7 +83,7 @@ export default function KnowledgeBaseSelector() {
                   className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  Create New Knowledge Base
+                  {t('kb.create_new')}
                 </Link>
               </div>
             )}
@@ -93,7 +95,7 @@ export default function KnowledgeBaseSelector() {
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-primary/10 transition-colors"
                 >
-                  Sign in to create your own knowledge base
+                  {t('kb.sign_in_to_create')}
                 </Link>
               </div>
             )}

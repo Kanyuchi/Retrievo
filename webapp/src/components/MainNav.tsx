@@ -27,22 +27,25 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '../contexts/AuthContext';
 import KnowledgeBaseSelector from './KnowledgeBaseSelector';
-
-const navItems = [
-  { path: '/', label: 'Home', icon: Home },
-  { path: '/datasets', label: 'Dataset', icon: Database },
-  { path: '/chats', label: 'Chat', icon: MessageSquare },
-  { path: '/searches', label: 'Search', icon: Search },
-  { path: '/agents', label: 'Agent', icon: Bot },
-  { path: '/files', label: 'Files', icon: FolderOpen },
-  { path: '/jobs', label: 'Jobs', icon: Briefcase },
-];
+import { useTranslation } from 'react-i18next';
+import { setLanguage } from '@/i18n';
 
 export default function MainNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
+  const { t, i18n } = useTranslation();
+
+  const navItems = [
+    { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/datasets', label: t('nav.dataset'), icon: Database },
+    { path: '/chats', label: t('nav.chat'), icon: MessageSquare },
+    { path: '/searches', label: t('nav.search'), icon: Search },
+    { path: '/agents', label: t('nav.agent'), icon: Bot },
+    { path: '/files', label: t('nav.files'), icon: FolderOpen },
+    { path: '/jobs', label: t('nav.jobs'), icon: Briefcase },
+  ];
 
   const handleLogout = async () => {
     await logout();
@@ -130,13 +133,16 @@ export default function MainNav() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="text-sm text-muted-foreground hover:text-foreground gap-1">
-                English <ChevronDown className="w-4 h-4" />
+                {i18n.language === 'de' ? t('common.german') : t('common.english')} <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card border-border">
-              <DropdownMenuItem>English</DropdownMenuItem>
-              <DropdownMenuItem>中文</DropdownMenuItem>
-              <DropdownMenuItem>日本語</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLanguage('en')}>
+                {t('common.english')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLanguage('de')}>
+                {t('common.german')}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -182,28 +188,28 @@ export default function MainNav() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/jobs')}>
                   <Briefcase className="mr-2 h-4 w-4" />
-                  Knowledge Bases
+                  {t('common.knowledge_bases')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/settings/data-sources')}>
-                  Data sources
+                  {t('common.data_sources')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings/model-providers')}>
-                  Model providers
+                  {t('common.model_providers')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings/mcp')}>
-                  MCP
+                  {t('common.mcp')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings/team')}>
-                  Team
+                  {t('common.team')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings/profile')}>
-                  Profile
+                  {t('common.profile')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Log out
+                  {t('common.sign_out')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -215,7 +221,7 @@ export default function MainNav() {
               className="gap-2"
             >
               <LogIn className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign in</span>
+              <span className="hidden sm:inline">{t('common.sign_in')}</span>
             </Button>
           )}
 
