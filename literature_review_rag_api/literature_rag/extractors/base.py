@@ -417,7 +417,20 @@ class GenericExtractor(BaseExtractor):
             if len(author.split()) >= 2 and re.search(r'[A-Za-z]', author):
                 authors.append(author)
 
-        return authors or None
+        if authors:
+            return authors
+
+        # Fallback: split CamelCase author names (e.g., AndreasDiekmann)
+        camel_parts = re.findall(r'[A-Z][a-z]+(?:-[A-Z][a-z]+)?', authors_text)
+        if len(camel_parts) >= 2:
+            return [" ".join(camel_parts)]
+
+        # Fallback: capitalized tokens line (handles names with initials)
+        tokens = re.findall(r'[A-Z][a-z]+|[A-Z]\.', authors_text)
+        if len(tokens) >= 2:
+            return [" ".join(tokens)]
+
+        return None
 
 class BusinessExtractor(GenericExtractor):
     """Extractor optimized for business documents.
