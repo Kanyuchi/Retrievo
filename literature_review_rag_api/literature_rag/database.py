@@ -568,6 +568,16 @@ class ChatSessionCRUD:
         db.commit()
 
     @staticmethod
+    def update(db: Session, session: ChatSession, *, title: Optional[str] = None) -> ChatSession:
+        """Update session metadata."""
+        if title is not None:
+            session.title = title
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        return session
+
+    @staticmethod
     def delete(db: Session, session: ChatSession):
         """Delete a chat session."""
         db.delete(session)

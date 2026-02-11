@@ -573,6 +573,11 @@ class ChatSessionCreateRequest(BaseModel):
     title: Optional[str] = Field(default=None, description="Session title")
 
 
+class ChatSessionUpdateRequest(BaseModel):
+    """Request model for updating a chat session."""
+    title: Optional[str] = Field(default=None, description="Session title")
+
+
 class ChatSessionResponse(BaseModel):
     """Response model for a chat session."""
     id: int

@@ -11,6 +11,7 @@ from ..auth import get_current_user
 from ..database import get_db, JobCRUD, ChatSessionCRUD, ChatMessageCRUD
 from ..models import (
     ChatSessionCreateRequest,
+    ChatSessionUpdateRequest,
     ChatSessionResponse,
     ChatSessionListResponse,
     ChatMessageCreateRequest,
@@ -33,6 +34,21 @@ async def create_chat_session(
 
     session = ChatSessionCRUD.create(db, current_user.id, request.job_id, request.title)
     return session
+
+
+@router.patch("/{session_id}", response_model=ChatSessionResponse)
+async def update_chat_session(
+    session_id: int,
+    request: ChatSessionUpdateRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = ChatSessionCRUD.get_by_id(db, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found")
+
+    updated = ChatSessionCRUD.update(db, session, title=request.title)
+    return updated
 
 
 @router.get("", response_model=ChatSessionListResponse)
@@ -72,7 +88,7 @@ async def get_chat_session(
                 content=msg.content,
                 citations=citations,
                 model=msg.model,
-                created_at=msg.created_at.isoformat(),
+                created_at=msg.created_at,
             )
         )
 
@@ -109,7 +125,7 @@ async def add_chat_message(
         content=message.content,
         citations=request.citations,
         model=message.model,
-        created_at=message.created_at.isoformat(),
+        created_at=message.created_at,
     )
 
 

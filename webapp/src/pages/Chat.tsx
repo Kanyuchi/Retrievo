@@ -140,6 +140,25 @@ export default function Chat() {
     return normalized.length > 60 ? `${normalized.slice(0, 57)}...` : normalized;
   };
 
+  const maybeUpdateSessionTitle = async (
+    session: { id: number; title?: string | null },
+    storedMessages: Array<{ role: string; content: string }>
+  ) => {
+    if (!accessToken) return;
+    if (session.title && session.title.trim().length > 0) return;
+    const firstUser = storedMessages.find((msg) => msg.role === 'user');
+    if (!firstUser) return;
+    const title = buildSessionTitle(firstUser.content);
+    if (!title) return;
+    try {
+      const updated = await api.updateChatSession(session.id, { title }, accessToken);
+      setSessions((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setActiveSession((prev) => (prev && prev.id === updated.id ? updated : prev));
+    } catch (err) {
+      console.error('Failed to update session title:', err);
+    }
+  };
+
   const hydrateSessionMessages = (storedMessages: Array<{ id: number; role: string; content: string; citations?: Array<Record<string, unknown>> | null }>) => {
     const mapped: Message[] = storedMessages.map((msg) => ({
       id: `session-${msg.id}`,
@@ -180,6 +199,7 @@ export default function Chat() {
       const detail = await api.getChatSession(sessionId, accessToken);
       setActiveSession(detail.session);
       hydrateSessionMessages(detail.messages);
+      maybeUpdateSessionTitle(detail.session, detail.messages);
     } catch (err) {
       console.error('Failed to load chat session:', err);
     } finally {

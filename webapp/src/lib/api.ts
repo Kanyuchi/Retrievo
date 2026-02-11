@@ -991,6 +991,22 @@ class ApiClient {
     }
     return response.blob();
   }
+
+  async updateChatSession(
+    sessionId: number,
+    payload: { title?: string },
+    accessToken?: string
+  ): Promise<ChatSession> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/chats/${sessionId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
