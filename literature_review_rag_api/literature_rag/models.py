@@ -577,8 +577,8 @@ class ChatSessionResponse(BaseModel):
     id: int
     job_id: int
     title: Optional[str]
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -609,7 +609,7 @@ class ChatMessageResponse(BaseModel):
     content: str
     citations: Optional[List[Dict[str, Any]]] = None
     model: Optional[str] = None
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
