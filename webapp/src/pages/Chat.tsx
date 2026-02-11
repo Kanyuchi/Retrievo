@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Send, Loader2, Bot, User, ChevronDown, Filter, Database, Folder, Sparkles, Clock, Zap, ChevronRight } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Bot, User, ChevronDown, Filter, Database, Folder, Sparkles, Clock, Zap, ChevronRight, Download, Plus, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -62,6 +62,9 @@ export default function Chat() {
   const [synthesisMode, setSynthesisMode] = useState<'paragraph' | 'bullet_points' | 'structured'>('paragraph');
   const [deepAnalysis, setDeepAnalysis] = useState(false);
   const [expandedStats, setExpandedStats] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Array<{ id: number; title?: string | null; created_at: string; updated_at: string }>>([]);
+  const [activeSession, setActiveSession] = useState<{ id: number; title?: string | null; created_at: string; updated_at: string } | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
 
   const { selectedKB, isDefaultSelected } = useKnowledgeBase();
   const { accessToken } = useAuth();
@@ -93,13 +96,105 @@ export default function Chat() {
   useEffect(() => {
     setPhaseFilter('');
     setTopicFilter('');
+    setMessages([]);
+    setActiveSession(null);
   }, [selectedKB?.id]);
+
+  // Load chat sessions for non-default KBs
+  useEffect(() => {
+    if (!isDefaultSelected && selectedKB && accessToken) {
+      setSessionLoading(true);
+      api.listChatSessions(selectedKB.id as number, accessToken)
+        .then((response) => setSessions(response.sessions))
+        .catch((err) => console.error('Failed to load chat sessions:', err))
+        .finally(() => setSessionLoading(false));
+    } else {
+      setSessions([]);
+      setActiveSession(null);
+    }
+  }, [selectedKB, isDefaultSelected, accessToken]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const formatSessionTitle = (session: { title?: string | null; created_at: string; id: number }) => {
+    if (session.title && session.title.trim().length > 0) return session.title;
+    const created = new Date(session.created_at);
+    const fallback = isNaN(created.getTime()) ? `Session ${session.id}` : created.toLocaleString();
+    return `Session ${fallback}`;
+  };
+
+  const hydrateSessionMessages = (storedMessages: Array<{ id: number; role: string; content: string; citations?: Array<Record<string, unknown>> | null }>) => {
+    const mapped: Message[] = storedMessages.map((msg) => ({
+      id: `session-${msg.id}`,
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content,
+      sources: Array.isArray(msg.citations)
+        ? msg.citations.map((citation, idx) => {
+            const cite = citation as Record<string, unknown>;
+            const authors = typeof cite.authors === 'string' ? cite.authors : 'Unknown';
+            const year = typeof cite.year === 'string' || typeof cite.year === 'number' ? cite.year : 'n.d.';
+            const title = typeof cite.title === 'string' ? cite.title : 'Untitled';
+            return {
+              title: `[${idx + 1}] ${authors} (${year}). ${title}`,
+              score: idx + 1,
+            };
+          })
+        : undefined,
+    }));
+    setMessages(mapped);
+  };
+
+  const handleCreateSession = async () => {
+    if (!selectedKB || !accessToken || isDefaultSelected) return;
+    try {
+      const newSession = await api.createChatSession(selectedKB.id as number, undefined, accessToken);
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSession(newSession);
+      setMessages([]);
+    } catch (err) {
+      console.error('Failed to create chat session:', err);
+    }
+  };
+
+  const handleOpenSession = async (sessionId: number) => {
+    if (!accessToken) return;
+    try {
+      setSessionLoading(true);
+      const detail = await api.getChatSession(sessionId, accessToken);
+      setActiveSession(detail.session);
+      hydrateSessionMessages(detail.messages);
+    } catch (err) {
+      console.error('Failed to load chat session:', err);
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const handleClearSession = () => {
+    setActiveSession(null);
+    setMessages([]);
+  };
+
+  const handleExportSession = async () => {
+    if (!activeSession || !accessToken) return;
+    try {
+      const blob = await api.exportChatSession(activeSession.id, 'md', accessToken);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `chat-session-${activeSession.id}.md`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export chat session:', err);
+    }
+  };
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading || !selectedKB) return;
@@ -115,10 +210,23 @@ export default function Chat() {
     setLoading(true);
 
     try {
+      if (activeSession && accessToken) {
+        await api.addChatMessage(
+          activeSession.id,
+          {
+            role: 'user',
+            content: userMessage.content,
+          },
+          accessToken
+        );
+      }
+
       let assistantContent = '';
       let sources: Message['sources'] = [];
       let complexity: Message['complexity'] = undefined;
       let pipelineStats: Message['pipelineStats'] = undefined;
+      let modelUsed: string | undefined = undefined;
+      let storedCitations: Array<Record<string, unknown>> | undefined = undefined;
 
       if (isDefaultSelected) {
         // Query default collection with agentic pipeline
@@ -138,6 +246,14 @@ export default function Chat() {
         }));
         complexity = response.complexity;
         pipelineStats = response.pipeline_stats;
+        modelUsed = response.model;
+        storedCitations = response.sources?.map(source => ({
+          citation_number: source.citation_number,
+          authors: source.authors,
+          year: source.year,
+          title: source.title,
+          doc_id: source.doc_id,
+        }));
       } else {
         // Query job collection with agentic pipeline (same as default)
         const response = await api.chatJob(
@@ -159,6 +275,14 @@ export default function Chat() {
         }));
         complexity = response.complexity;
         pipelineStats = response.pipeline_stats;
+        modelUsed = response.model;
+        storedCitations = response.sources?.map(source => ({
+          citation_number: source.citation_number,
+          authors: source.authors,
+          year: source.year,
+          title: source.title,
+          doc_id: source.doc_id,
+        }));
       }
 
       const assistantMessage: Message = {
@@ -171,6 +295,19 @@ export default function Chat() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      if (activeSession && accessToken) {
+        await api.addChatMessage(
+          activeSession.id,
+          {
+            role: 'assistant',
+            content: assistantContent,
+            citations: storedCitations,
+            model: modelUsed,
+          },
+          accessToken
+        );
+      }
     } catch (err) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -181,7 +318,7 @@ export default function Chat() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, selectedKB, isDefaultSelected, accessToken, phaseFilter, topicFilter, synthesisMode, deepAnalysis]);
+  }, [input, loading, selectedKB, isDefaultSelected, accessToken, phaseFilter, topicFilter, synthesisMode, deepAnalysis, activeSession]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -217,11 +354,57 @@ export default function Chat() {
                   <Folder className="w-3 h-3" />
                 )}
                 <span>Querying: {selectedKB?.name}</span>
+                {!isDefaultSelected && (
+                  <span className="text-xs text-muted-foreground/70">History saved only in opened sessions</span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Chat Sessions (only for non-default KBs) */}
+            {!isDefaultSelected && selectedKB && accessToken && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
+                      <FolderOpen className="w-4 h-4" />
+                      {activeSession ? formatSessionTitle(activeSession) : 'Open Session'}
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-card border-border">
+                    <DropdownMenuItem onClick={handleCreateSession} disabled={sessionLoading}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      New Session
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleClearSession} disabled={!activeSession}>
+                      Clear Session
+                    </DropdownMenuItem>
+                    {sessions.length === 0 && (
+                      <DropdownMenuItem disabled>
+                        No saved sessions
+                      </DropdownMenuItem>
+                    )}
+                    {sessions.map((session) => (
+                      <DropdownMenuItem key={session.id} onClick={() => handleOpenSession(session.id)}>
+                        {formatSessionTitle(session)}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  className="border-border bg-secondary/50 hover:bg-secondary gap-2"
+                  onClick={handleExportSession}
+                  disabled={!activeSession}
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </Button>
+              </>
+            )}
+
             {/* Deep Analysis Toggle */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-secondary/50">
               <Sparkles className={`w-4 h-4 ${deepAnalysis ? 'text-primary' : 'text-muted-foreground'}`} />

@@ -81,6 +81,34 @@ export interface ChatResponse {
   filters_applied: Record<string, string>;
 }
 
+export interface ChatSession {
+  id: number;
+  job_id: number;
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionListResponse {
+  total: number;
+  sessions: ChatSession[];
+}
+
+export interface ChatMessage {
+  id: number;
+  session_id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  citations?: Array<Record<string, unknown>> | null;
+  model?: string | null;
+  created_at: string;
+}
+
+export interface ChatSessionDetailResponse {
+  session: ChatSession;
+  messages: ChatMessage[];
+}
+
 export interface QueryResponse {
   answer: string;
   documents: Array<{
@@ -891,6 +919,77 @@ class ApiClient {
     if (options?.topic_filter) searchParams.set('topic_filter', options.topic_filter);
     if (options?.deep_analysis) searchParams.set('deep_analysis', 'true');
     return this.fetch(`/api/jobs/${jobId}/chat?${searchParams.toString()}`, { headers });
+  }
+
+  // Chat sessions (persisted chat history)
+  async createChatSession(
+    jobId: number,
+    title?: string,
+    accessToken?: string
+  ): Promise<ChatSession> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/chats', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ job_id: jobId, title }),
+    });
+  }
+
+  async listChatSessions(jobId: number, accessToken?: string): Promise<ChatSessionListResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const searchParams = new URLSearchParams();
+    searchParams.set('job_id', jobId.toString());
+    return this.fetch(`/api/chats?${searchParams.toString()}`, { headers });
+  }
+
+  async getChatSession(sessionId: number, accessToken?: string): Promise<ChatSessionDetailResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/chats/${sessionId}`, { headers });
+  }
+
+  async addChatMessage(
+    sessionId: number,
+    payload: { role: 'user' | 'assistant' | 'system'; content: string; citations?: Array<Record<string, unknown>>; model?: string },
+    accessToken?: string
+  ): Promise<ChatMessage> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/chats/${sessionId}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async exportChatSession(
+    sessionId: number,
+    format: 'md' | 'txt' = 'md',
+    accessToken?: string
+  ): Promise<Blob> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const response = await fetch(`${this.baseUrl}/api/chats/${sessionId}/export?format=${format}`, {
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || error.error || `HTTP ${response.status}`);
+    }
+    return response.blob();
   }
 }
 
