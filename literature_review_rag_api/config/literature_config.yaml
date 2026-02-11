@@ -303,7 +303,7 @@ storage:
 
   # Metadata caching for faster startup
   cache_metadata: true
-  metadata_cache_path: "/Users/fadzie/Desktop/lit_rag/literature_review_rag_api/indices/metadata_cache.pkl"
+  metadata_cache_path: "./indices/metadata_cache.pkl"
 
   # ChromaDB settings
   chroma_settings:
