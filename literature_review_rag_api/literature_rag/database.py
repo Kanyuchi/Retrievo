@@ -380,6 +380,12 @@ class UserCRUD:
         user.last_login_at = datetime.utcnow()
         db.commit()
 
+    @staticmethod
+    def delete(db: Session, user: User):
+        """Hard delete a user and all related records."""
+        db.delete(user)
+        db.commit()
+
 
 class JobCRUD:
     """CRUD operations for Job model."""

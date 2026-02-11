@@ -11,8 +11,13 @@ from fastapi import APIRouter, HTTPException, status, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import (
-    get_db, init_db, User, UserCRUD, RefreshTokenCRUD, OAuthProvider
+    get_db, init_db, User, UserCRUD, RefreshTokenCRUD, OAuthProvider,
+    JobCRUD, DocumentCRUD
 )
+from ..config import load_config
+from ..storage import get_storage_auto
+import chromadb
+from pathlib import Path
 from ..auth import (
     hash_password, verify_password, create_token_pair,
     decode_token, hash_token, get_current_user,
@@ -234,6 +239,66 @@ async def get_current_user_info(
         is_verified=current_user.is_verified,
         created_at=current_user.created_at.isoformat()
     )
+
+
+def _hard_delete_job_for_user(db: Session, job) -> None:
+    """Hard delete a job and associated storage/indices."""
+    cfg = load_config()
+
+    # Delete ChromaDB collection
+    try:
+        client = chromadb.PersistentClient(path=cfg.storage.indices_path)
+        client.delete_collection(job.collection_name)
+    except Exception:
+        pass
+
+    # Delete BM25 index for this job
+    try:
+        bm25_path = Path(cfg.storage.indices_path) / f"bm25_job_{job.id}.pkl"
+        if bm25_path.exists():
+            bm25_path.unlink()
+    except Exception:
+        pass
+
+    # Delete documents from storage
+    try:
+        storage = get_storage_auto()
+        documents = DocumentCRUD.get_job_documents(db, job.id)
+        for doc in documents:
+            if doc.storage_key:
+                try:
+                    storage.delete_pdf(doc.storage_key)
+                except Exception:
+                    pass
+            db.delete(doc)
+    except Exception:
+        pass
+
+    db.delete(job)
+
+
+@router.delete("/me")
+async def delete_current_user(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete the current user and all related data.
+    """
+    # Hard delete all jobs (collections, BM25, storage, DB)
+    jobs = JobCRUD.get_user_jobs(db, current_user.id, include_archived=True)
+    for job in jobs:
+        _hard_delete_job_for_user(db, job)
+
+    # Revoke refresh tokens
+    RefreshTokenCRUD.revoke_all_for_user(db, current_user.id)
+
+    # Delete user
+    UserCRUD.delete(db, current_user)
+
+    clear_auth_cookies(response)
+    return {"message": "Account deleted"}
 
 
 # ============================================================================

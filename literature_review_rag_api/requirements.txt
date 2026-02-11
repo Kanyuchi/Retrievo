@@ -3,13 +3,11 @@
 # ============================================================================
 # Adapted from personality RAG (100% MBTI accuracy, 15ms queries)
 
-# Core RAG dependencies (same as personality RAG - proven)
-# Using specific versions to avoid compatibility issues
+# Core RAG dependencies
 numpy<2.0.0
 chromadb==0.4.24
-langchain-huggingface>=0.1.0
-sentence-transformers>=2.2.0
 torch>=2.0.0
+sentence-transformers>=2.2.0
 
 # FastAPI server
 fastapi>=0.104.0
@@ -21,7 +19,7 @@ python-multipart>=0.0.6
 # LLM Integration (Groq - FREE tier with Llama 3.3 70B)
 groq>=0.4.0
 
-# OpenAI Embeddings (optional - for faster embedding generation)
+# OpenAI Embeddings
 openai>=1.0.0
 langchain-openai>=0.1.0
 

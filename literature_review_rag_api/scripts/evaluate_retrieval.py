@@ -122,7 +122,6 @@ def main() -> None:
 
     cfg = load_config()
     rag_config = {
-        "device": cfg.embedding.device,
         "collection_name": cfg.storage.collection_name,
         "expand_queries": cfg.retrieval.expand_queries,
         "max_expansions": cfg.retrieval.max_expansions,
@@ -130,7 +129,8 @@ def main() -> None:
         "reranker_model": cfg.retrieval.reranker_model,
         "rerank_top_k": cfg.retrieval.rerank_top_k,
         "normalization_enable": cfg.normalization.enable,
-        "term_maps": cfg.normalization.term_maps
+        "term_maps": cfg.normalization.term_maps,
+        "openai_model": cfg.embedding.openai_model
     }
     if args.no_rerank:
         rag_config["use_reranking"] = False
@@ -138,7 +138,7 @@ def main() -> None:
     rag = LiteratureReviewRAG(
         chroma_path=cfg.storage.indices_path,
         config=rag_config,
-        embedding_model=cfg.embedding.model
+        openai_model=cfg.embedding.openai_model
     )
 
     queries = load_queries(Path(args.queries))

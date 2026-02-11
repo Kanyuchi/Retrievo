@@ -13,14 +13,13 @@ from typing import List, Dict, Any
 from tqdm import tqdm
 import chromadb
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-import torch
 import pickle
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from literature_rag.config import load_config
+from literature_rag.embeddings import get_embeddings
 from literature_rag.pdf_extractor import AcademicPDFExtractor, extract_keywords_from_text
 
 logging.basicConfig(
@@ -87,16 +86,8 @@ class LiteratureIndexBuilder:
 
     def init_embeddings(self):
         """Initialize embedding model."""
-        device = self.config.embedding.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=self.config.embedding.model,
-            model_kwargs={"device": device},
-            encode_kwargs={"normalize_embeddings": self.config.embedding.normalize}
-        )
-        logger.info(f"Embeddings initialized: {self.config.embedding.model} on {device}")
+        self.embeddings = get_embeddings(self.config.embedding)
+        logger.info(f"Embeddings initialized: {self.config.embedding.openai_model}")
 
     def init_chroma_db(self):
         """Initialize ChromaDB client and collection."""

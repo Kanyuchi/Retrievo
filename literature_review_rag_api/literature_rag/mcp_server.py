@@ -31,7 +31,6 @@ def get_rag_system():
         _rag_system = LiteratureReviewRAG(
             chroma_path=config.storage.indices_path,
             config={
-                "device": config.embedding.device,
                 "collection_name": config.storage.collection_name,
                 "expand_queries": config.retrieval.expand_queries,
                 "max_expansions": config.retrieval.max_expansions,
@@ -48,8 +47,9 @@ def get_rag_system():
                 "bm25_use_stemming": config.retrieval.bm25_use_stemming,
                 "bm25_min_token_length": config.retrieval.bm25_min_token_length,
                 "indices_path": config.storage.indices_path,
+                "openai_model": config.embedding.openai_model,
             },
-            embedding_model=config.embedding.model
+            openai_model=config.embedding.openai_model
         )
         logger.info("Literature Review RAG system initialized successfully")
     return _rag_system

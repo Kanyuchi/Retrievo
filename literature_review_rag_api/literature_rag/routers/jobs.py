@@ -169,7 +169,7 @@ def build_job_indexer(
     """Create a DocumentIndexer for a job collection using shared config.
 
     Supports:
-    - Both HuggingFace (local) and OpenAI (API) embeddings
+    - OpenAI (API) embeddings
     - Multiple document types via extractor_type parameter
 
     Args:

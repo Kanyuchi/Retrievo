@@ -4,7 +4,7 @@ Provides reusable indexing functionality for both batch indexing and
 runtime PDF uploads. Extracted from build_index.py patterns.
 
 Supports:
-- Both HuggingFace (local) and OpenAI (API) embeddings
+- OpenAI (API) embeddings
 - Multiple document types (academic, business, generic) via extractor factory
 """
 
@@ -44,7 +44,7 @@ class DocumentIndexer:
         Args:
             chroma_client: Existing ChromaDB client instance
             collection: Existing ChromaDB collection to add documents to
-            embeddings: Embeddings instance (HuggingFace or OpenAI)
+            embeddings: Embeddings instance (OpenAI)
             config: Configuration dictionary (optional)
             bm25_retriever: Optional BM25Retriever instance for hybrid search sync
             extractor_type: Override extractor type ("academic", "business", "generic", "auto")

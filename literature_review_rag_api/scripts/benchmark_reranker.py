@@ -32,16 +32,16 @@ def create_rag_instance(config, use_reranking: bool) -> LiteratureReviewRAG:
     return LiteratureReviewRAG(
         chroma_path=config.storage.indices_path,
         config={
-            "device": config.embedding.device,
             "collection_name": config.storage.collection_name,
             "expand_queries": config.retrieval.expand_queries,
             "max_expansions": config.retrieval.max_expansions,
             "use_reranking": use_reranking,
             "reranker_model": config.retrieval.reranker_model,
             "rerank_top_k": config.retrieval.rerank_top_k,
-            "term_maps": config.normalization.term_maps if config.normalization.enable else {}
+            "term_maps": config.normalization.term_maps if config.normalization.enable else {},
+            "openai_model": config.embedding.openai_model
         },
-        embedding_model=config.embedding.model
+        openai_model=config.embedding.openai_model
     )
 
 

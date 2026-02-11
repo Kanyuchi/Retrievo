@@ -84,11 +84,11 @@ exit
 
 ```bash
 # Clone the repository
-cd /opt/lit-rag
-git clone https://github.com/Kanyuchi/literature-rag-mcp.git .
+cd ~
+git clone https://github.com/Kanyuchi/literature-rag-mcp.git literature_review_rag_api
 
 # Navigate to API directory
-cd literature_review_rag_api
+cd ~/literature_review_rag_api/literature_review_rag_api
 
 # Create environment file
 cp .env.example .env
@@ -140,10 +140,10 @@ If you have the pre-built 85-paper index, copy it to the server:
 
 ```bash
 # From your local machine
-scp -r indices/ ubuntu@<your-ip>:/opt/lit-rag/literature_review_rag_api/
+scp -r indices/ ubuntu@<your-ip>:/home/ubuntu/literature_review_rag_api/literature_review_rag_api/
 
 # Or use rsync
-rsync -avz indices/ ubuntu@<your-ip>:/opt/lit-rag/literature_review_rag_api/indices/
+rsync -avz indices/ ubuntu@<your-ip>:/home/ubuntu/literature_review_rag_api/literature_review_rag_api/indices/
 ```
 
 ## Step 7: Setup Domain (Optional)
@@ -165,8 +165,8 @@ sudo apt-get install certbot
 sudo certbot certonly --standalone -d your-domain.com
 
 # Copy certificates
-sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /opt/lit-rag/literature_review_rag_api/nginx/ssl/
-sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem /opt/lit-rag/literature_review_rag_api/nginx/ssl/
+sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ~/literature_review_rag_api/literature_review_rag_api/nginx/ssl/
+sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem ~/literature_review_rag_api/literature_review_rag_api/nginx/ssl/
 ```
 
 Then update `nginx/nginx.conf` to enable the HTTPS server block.

@@ -3,13 +3,11 @@
 Adapted from personality RAG system (100% MBTI accuracy, 15ms queries).
 Key innovation: Explicit academic term normalization for improved search relevance.
 
-Supports both HuggingFace (local) and OpenAI (API) embeddings.
+Supports OpenAI (API) embeddings only.
 """
 
 import chromadb
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-import torch
 import re
 import logging
 from typing import Dict, List, Optional, Tuple, Any
@@ -27,9 +25,7 @@ class LiteratureReviewRAG:
         self,
         chroma_path: str,
         config: dict = None,
-        embedding_model: str = "BAAI/bge-base-en-v1.5",
         use_pool: bool = True,
-        embedding_provider: str = None,
         openai_model: str = None
     ):
         """
@@ -38,52 +34,33 @@ class LiteratureReviewRAG:
         Args:
             chroma_path: Path to ChromaDB persistence directory
             config: Configuration dictionary from literature_config.yaml
-            embedding_model: HuggingFace embedding model name (default: BGE-base)
             use_pool: Whether to use connection pooling (default: True)
-            embedding_provider: "huggingface" or "openai" (default: auto-detect)
             openai_model: OpenAI model name (default: text-embedding-3-small)
         """
         self.config = config or {}
         self.normalization_enabled = self.config.get("normalization_enable", True)
         self._use_pool = use_pool
 
-        # Device selection (for HuggingFace)
-        device = self.config.get("device", "auto")
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # Embedding provider selection
-        provider = embedding_provider or self.config.get("embedding_provider", None)
+        # Embedding provider selection (OpenAI only)
+        provider = "openai"
         openai_model = openai_model or self.config.get("openai_model", "text-embedding-3-small")
 
-        logger.info(f"Initializing Literature Review RAG (pooled: {use_pool}, provider: {provider or 'auto'})")
+        logger.info(f"Initializing Literature Review RAG (pooled: {use_pool}, provider: {provider})")
 
-        # Initialize embeddings - use pool if enabled
+        # Initialize embeddings - OpenAI only
         if use_pool:
             self.embeddings = get_pooled_embeddings(
-                model_name=embedding_model,
-                device=device,
-                normalize=True,
-                provider=provider,
                 openai_model=openai_model
             )
             self.client = get_pooled_chroma_client(chroma_path)
         else:
-            # Direct initialization (for backward compatibility or testing)
-            if provider == "openai":
-                from .embeddings import get_embeddings
-                from .config import EmbeddingConfig
-                embed_config = EmbeddingConfig(
-                    provider="openai",
-                    openai_model=openai_model
-                )
-                self.embeddings = get_embeddings(embed_config)
-            else:
-                self.embeddings = HuggingFaceEmbeddings(
-                    model_name=embedding_model,
-                    model_kwargs={"device": device},
-                    encode_kwargs={"normalize_embeddings": True}
-                )
+            from .embeddings import get_embeddings
+            from .config import EmbeddingConfig
+            embed_config = EmbeddingConfig(
+                provider="openai",
+                openai_model=openai_model
+            )
+            self.embeddings = get_embeddings(embed_config)
             self.client = chromadb.PersistentClient(path=chroma_path)
 
         # Store embedding info for stats
@@ -101,12 +78,18 @@ class LiteratureReviewRAG:
         # Load academic term normalization maps (optional)
         term_maps_config = self.config.get("term_maps", {}) if self.normalization_enabled else {}
         self.term_maps = self._load_term_maps(term_maps_config)
+        try:
+            import torch
+            rerank_device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            rerank_device = "cpu"
+
         self._reranker = None
         self._reranker_config = {
             "enabled": self.config.get("use_reranking", False),
             "model": self.config.get("reranker_model", "BAAI/bge-reranker-base"),
             "rerank_top_k": self.config.get("rerank_top_k", 20),
-            "device": device
+            "device": rerank_device
         }
 
         # Initialize hybrid search components (lazy-loaded)

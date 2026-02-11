@@ -2,7 +2,7 @@
 
 Manages shared ChromaDB clients and embedding model instances.
 Provides efficient resource sharing across requests and workers.
-Supports both HuggingFace (local) and OpenAI (API) embeddings.
+Supports OpenAI (API) embeddings only.
 """
 
 import logging
@@ -14,8 +14,6 @@ from weakref import WeakValueDictionary
 
 import chromadb
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +23,14 @@ class PoolConfig:
     """Configuration for the connection pool."""
     max_chroma_clients: int = 10  # Max ChromaDB client instances
     embedding_cache_size: int = 5  # Max embedding model instances
-    default_device: str = "auto"
-    default_embedding_model: str = "BAAI/bge-base-en-v1.5"
     # OpenAI settings
-    default_embedding_provider: str = "huggingface"  # "huggingface" or "openai"
     default_openai_model: str = "text-embedding-3-small"
 
 
 class EmbeddingPool:
     """Pool of embedding model instances.
 
-    Supports both HuggingFace (local) and OpenAI (API) embeddings.
-    Embedding models are expensive to load (~500MB+ for BGE-base).
+    Supports OpenAI (API) embeddings only.
     This pool caches loaded models and shares them across requests.
     Thread-safe for concurrent access.
     """
@@ -44,117 +38,42 @@ class EmbeddingPool:
     def __init__(
         self,
         max_size: int = 5,
-        default_device: str = "auto",
-        default_provider: str = "huggingface",
         default_openai_model: str = "text-embedding-3-small"
     ):
         """Initialize embedding pool.
 
         Args:
             max_size: Maximum number of cached model instances
-            default_device: Default device for HuggingFace models
-            default_provider: Default provider ("huggingface" or "openai")
             default_openai_model: Default OpenAI model name
         """
         self._cache: Dict[str, Embeddings] = {}
         self._lock = threading.Lock()
         self._max_size = max_size
         self._access_order: list = []  # LRU tracking
-        self._default_device = default_device
-        self._default_provider = default_provider
         self._default_openai_model = default_openai_model
-
-    def _resolve_device(self, device: str) -> str:
-        """Resolve device string to actual device."""
-        if device == "auto":
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        return device
 
     def _make_cache_key(
         self,
-        provider: str,
-        model_name: str,
-        device: str = None
+        model_name: str
     ) -> str:
         """Create cache key for model instance."""
-        if provider == "openai":
-            return f"openai::{model_name}"
-        else:
-            return f"huggingface::{model_name}::{device}"
+        return f"openai::{model_name}"
 
     def get_embeddings(
         self,
-        model_name: str = None,
-        device: str = None,
-        normalize: bool = True,
-        provider: str = None,
         openai_model: str = None,
         openai_api_key: str = None
     ) -> Embeddings:
         """Get or create an embedding model instance.
 
         Args:
-            model_name: HuggingFace model identifier (default: BGE-base)
-            device: Device to use for HuggingFace (default: auto)
-            normalize: Whether to normalize embeddings (HuggingFace only)
-            provider: "huggingface" or "openai" (default: auto-detect)
             openai_model: OpenAI model name (default: text-embedding-3-small)
             openai_api_key: OpenAI API key (default: from environment)
 
         Returns:
-            Embeddings instance (HuggingFaceEmbeddings or OpenAIEmbeddings)
+            OpenAIEmbeddings instance
         """
-        # Determine provider
-        if provider is None:
-            # Auto-detect: use OpenAI if API key is available
-            api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-            provider = "openai" if api_key else self._default_provider
-
-        if provider == "openai":
-            return self._get_openai_embeddings(openai_model, openai_api_key)
-        else:
-            return self._get_huggingface_embeddings(model_name, device, normalize)
-
-    def _get_huggingface_embeddings(
-        self,
-        model_name: str = None,
-        device: str = None,
-        normalize: bool = True
-    ) -> HuggingFaceEmbeddings:
-        """Get or create a HuggingFace embedding model instance."""
-        model_name = model_name or "BAAI/bge-base-en-v1.5"
-        device = self._resolve_device(device or self._default_device)
-        cache_key = self._make_cache_key("huggingface", model_name, device)
-
-        with self._lock:
-            # Check cache
-            if cache_key in self._cache:
-                # Update LRU order
-                if cache_key in self._access_order:
-                    self._access_order.remove(cache_key)
-                self._access_order.append(cache_key)
-                logger.debug(f"Embedding pool hit: {cache_key}")
-                return self._cache[cache_key]
-
-            # Evict LRU entry if at capacity
-            if len(self._cache) >= self._max_size:
-                lru_key = self._access_order.pop(0)
-                del self._cache[lru_key]
-                logger.info(f"Embedding pool eviction: {lru_key}")
-
-            # Create new instance
-            logger.info(f"Loading HuggingFace embedding model: {model_name} on {device}")
-            embeddings = HuggingFaceEmbeddings(
-                model_name=model_name,
-                model_kwargs={"device": device},
-                encode_kwargs={"normalize_embeddings": normalize}
-            )
-
-            self._cache[cache_key] = embeddings
-            self._access_order.append(cache_key)
-            logger.info(f"HuggingFace embedding model loaded. Pool size: {len(self._cache)}")
-
-            return embeddings
+        return self._get_openai_embeddings(openai_model, openai_api_key)
 
     def _get_openai_embeddings(
         self,
@@ -163,13 +82,12 @@ class EmbeddingPool:
     ) -> Embeddings:
         """Get or create an OpenAI embedding model instance."""
         model_name = model_name or self._default_openai_model
-        cache_key = self._make_cache_key("openai", model_name)
+        cache_key = self._make_cache_key(model_name)
 
         # Get API key
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            logger.warning("OpenAI API key not found, falling back to HuggingFace")
-            return self._get_huggingface_embeddings()
+            raise ValueError("OpenAI API key required for embeddings.")
 
         with self._lock:
             # Check cache
@@ -203,12 +121,11 @@ class EmbeddingPool:
 
                 return embeddings
 
-            except ImportError:
-                logger.warning("langchain-openai not installed, falling back to HuggingFace")
-                return self._get_huggingface_embeddings()
-            except Exception as e:
-                logger.error(f"Failed to initialize OpenAI embeddings: {e}, falling back to HuggingFace")
-                return self._get_huggingface_embeddings()
+            except ImportError as e:
+                raise ImportError(
+                    "langchain-openai required for OpenAI embeddings. "
+                    "Install with: pip install langchain-openai"
+                ) from e
 
     def clear(self):
         """Clear all cached embeddings."""
@@ -229,8 +146,7 @@ class EmbeddingPool:
                 "cached_models": len(self._cache),
                 "max_size": self._max_size,
                 "models": list(self._cache.keys()),
-                "default_device": self._default_device,
-                "default_provider": self._default_provider
+                "default_provider": "openai"
             }
 
 
@@ -341,8 +257,6 @@ class ConnectionPool:
 
         self._embedding_pool = EmbeddingPool(
             max_size=config.embedding_cache_size,
-            default_device=config.default_device,
-            default_provider=config.default_embedding_provider,
             default_openai_model=config.default_openai_model
         )
         self._chroma_pool = ChromaPool(max_clients=config.max_chroma_clients)
@@ -353,19 +267,11 @@ class ConnectionPool:
 
     def get_embeddings(
         self,
-        model_name: str = None,
-        device: str = None,
-        normalize: bool = True,
-        provider: str = None,
         openai_model: str = None,
         openai_api_key: str = None
     ) -> Embeddings:
         """Get embedding model from pool."""
         return self._embedding_pool.get_embeddings(
-            model_name=model_name or self._config.default_embedding_model,
-            device=device or self._config.default_device,
-            normalize=normalize,
-            provider=provider or self._config.default_embedding_provider,
             openai_model=openai_model or self._config.default_openai_model,
             openai_api_key=openai_api_key
         )
@@ -407,19 +313,11 @@ def get_pool(config: PoolConfig = None) -> ConnectionPool:
 
 
 def get_pooled_embeddings(
-    model_name: str = None,
-    device: str = None,
-    normalize: bool = True,
-    provider: str = None,
     openai_model: str = None,
     openai_api_key: str = None
 ) -> Embeddings:
     """Convenience function to get embeddings from global pool."""
     return get_pool().get_embeddings(
-        model_name=model_name,
-        device=device,
-        normalize=normalize,
-        provider=provider,
         openai_model=openai_model,
         openai_api_key=openai_api_key
     )

@@ -3,7 +3,7 @@
 Wraps a job's ChromaDB collection to provide the same interface
 as LiteratureReviewRAG, enabling use with the agentic pipeline.
 
-Supports both HuggingFace (local) and OpenAI (API) embeddings.
+Supports OpenAI (API) embeddings only.
 """
 
 import logging
@@ -51,9 +51,11 @@ class JobCollectionRAG:
         # Store embedding info for stats
         self._embedding_info = get_embedding_info(self.embeddings)
 
-        # Determine device for reranker
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
 
         self._reranker = None
         self._reranker_config = {

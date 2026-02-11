@@ -124,16 +124,12 @@ embedding:
   # ========================================================================
   # EMBEDDING PROVIDER SELECTION
   # ========================================================================
-  # Options: "huggingface" (local, free, slower) or "openai" (API, fast, ~$0.02/1M tokens)
-  #
-  # Auto-detection: If OPENAI_API_KEY is set in .env and provider is not specified,
-  # the system will automatically use OpenAI embeddings for faster indexing.
-  #
-  # IMPORTANT: Switching providers requires reindexing due to dimension differences:
-  # - HuggingFace BAAI/bge-base-en-v1.5: 768 dimensions
-  # - OpenAI text-embedding-3-small: 1536 dimensions
+  # OpenAI embeddings only.
+  # IMPORTANT: Switching OpenAI models requires reindexing due to dimension differences:
+  # - text-embedding-3-small: 1536 dimensions
+  # - text-embedding-3-large: 3072 dimensions
   # ========================================================================
-  provider: "openai"  # "huggingface" or "openai" (auto-detects if not set)
+  provider: "openai"
 
   # ========================================================================
   # STRICT PROVIDER MODE (PRODUCTION SAFETY)
@@ -141,31 +137,18 @@ embedding:
   # If true, the system will FAIL FAST if the specified provider is unavailable
   # (e.g., provider: "openai" but OPENAI_API_KEY is missing).
   #
-  # If false (default), it will silently fall back to HuggingFace, which can
-  # cause dimension mismatch errors if indices were created with OpenAI.
+  # If false, it will allow non-OpenAI providers (not supported).
   #
-  # RECOMMENDED: Set to true in production to prevent silent dimension mismatches.
+  # RECOMMENDED: Keep true in production.
   # ========================================================================
-  strict_provider: false  # <-- Set true for production!
+  strict_provider: true
 
   # OpenAI embedding settings (used when provider: "openai")
   # Models: text-embedding-3-small (1536 dims, cheap), text-embedding-3-large (3072 dims, better)
   openai_model: "text-embedding-3-small"
 
-  # HuggingFace embedding settings (used when provider: "huggingface")
-  # This is the fallback if OPENAI_API_KEY is not set
-  model: "BAAI/bge-base-en-v1.5"
-  dimension: 768  # Auto-set based on provider
-  normalize: true
-
-  # Device selection (HuggingFace only)
-  device: "auto"  # Options: "auto", "cuda", "cpu"
-
   # Batch size for indexing (adjust based on available memory)
   batch_size: 32
-
-  # Model cache directory (HuggingFace only)
-  cache_folder: null  # null = use default, or specify path
 
 # ----------------------------------------------------------------------------
 # SEARCH & RETRIEVAL
@@ -182,10 +165,10 @@ retrieval:
   bm25_use_stemming: true # Use Porter stemming for BM25 tokenization
   bm25_min_token_length: 2  # Minimum token length for BM25
 
-  # Cross-encoder reranking
-  use_reranking: true     # Enable cross-encoder reranking for higher quality
+  # Cross-encoder reranking (requires sentence-transformers + torch)
+  use_reranking: true
   reranker_model: "BAAI/bge-reranker-base"
-  rerank_top_k: 20        # Retrieve top K candidates before reranking
+  rerank_top_k: 20         # Retrieve top K candidates before reranking
 
   # Query expansion (academic term normalization)
   expand_queries: true
@@ -285,9 +268,11 @@ api:
     - "http://127.0.0.1:3000"
     - "http://localhost:5173"
     - "http://127.0.0.1:5173"
+    - "http://13.49.191.201"
+    - "https://13.49.191.201"
   cors_credentials: true
-  cors_methods: ["GET", "POST", "OPTIONS"]
-  cors_headers: ["Authorization", "Content-Type", "X-API-Key"]
+  cors_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  cors_headers: ["Authorization", "Content-Type", "X-API-Key", "X-CSRF-Token"]
 
   # Optional authentication
   require_api_key: false  # Disabled for local development

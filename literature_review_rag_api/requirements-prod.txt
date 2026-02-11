@@ -1,12 +1,13 @@
 # ============================================================================
 # Literature Review RAG System - Production Dependencies (Slim)
 # ============================================================================
-# This file excludes PyTorch/CUDA for smaller Docker images when using
-# OpenAI embeddings. Use requirements.txt for local development with GPU.
+# This file excludes PyTorch/CUDA for smaller Docker images.
 
-# Core RAG dependencies (without torch/sentence-transformers)
+# Core RAG dependencies
 numpy<2.0.0
 chromadb==0.4.24
+torch>=2.1.0
+sentence-transformers>=2.2.2
 
 # FastAPI server
 fastapi>=0.104.0

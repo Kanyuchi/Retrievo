@@ -31,23 +31,24 @@ sudo apt-get install -y git htop curl wget unzip
 
 # Create app directory
 echo "Creating application directory..."
-sudo mkdir -p /opt/lit-rag
-sudo chown $USER:$USER /opt/lit-rag
+APP_ROOT="/home/$USER/literature_review_rag_api"
+BACKEND_DIR="$APP_ROOT/literature_review_rag_api"
+mkdir -p "$APP_ROOT"
 
-# Create data directories
-mkdir -p /opt/lit-rag/data/db
-mkdir -p /opt/lit-rag/data/indices
-mkdir -p /opt/lit-rag/data/uploads
-mkdir -p /opt/lit-rag/certbot/conf
-mkdir -p /opt/lit-rag/certbot/www
-mkdir -p /opt/lit-rag/nginx/ssl
+# Create data directories (under the backend folder used by docker-compose)
+mkdir -p "$BACKEND_DIR/data/db"
+mkdir -p "$BACKEND_DIR/data/indices"
+mkdir -p "$BACKEND_DIR/data/uploads"
+mkdir -p "$BACKEND_DIR/certbot/conf"
+mkdir -p "$BACKEND_DIR/certbot/www"
+mkdir -p "$BACKEND_DIR/nginx/ssl"
 
 echo "=========================================="
 echo "Setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Log out and back in (for docker group)"
-echo "2. Clone your repository to /opt/lit-rag"
+echo "2. Clone your repository to ~/literature_review_rag_api"
 echo "3. Copy .env.example to .env and configure"
 echo "4. Run: docker-compose up -d"
 echo "=========================================="
