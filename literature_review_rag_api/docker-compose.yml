@@ -42,10 +42,10 @@ services:
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       - OAUTH_REDIRECT_BASE=${OAUTH_REDIRECT_BASE:-http://localhost:8001}
     volumes:
-      # Persist database and indices
-      - ./data:/app/data
-      # Mount indices (pre-built default collection)
-      - ./indices:/app/indices
+      # Persist database, indices, and uploads (override with env in production)
+      - ${LITRAG_DATA_DIR:-./data}:/app/data
+      - ${LITRAG_INDICES_DIR:-./indices}:/app/indices
+      - ${LITRAG_UPLOADS_DIR:-./uploads}:/app/uploads
       # Mount config
       - ./config:/app/config:ro
     restart: unless-stopped
