@@ -453,7 +453,7 @@ async def root():
     }
 
 
-@app.get("/api/stats", dependencies=[Depends(require_auth_if_configured)])
+@app.get("/api/stats")
 async def get_stats():
     """
     Get collection statistics for the webapp dashboard.
@@ -677,9 +677,9 @@ async def api_answer_with_citations(
             "sources": sources,
             "bibliography": bibliography,
             "suggested_structure": [
-                f"Based on {len(sources)} relevant sources from the literature collection:",
-                "The research addresses this topic through multiple perspectives.",
-                "Key findings from the literature include relevant insights on your question.",
+                f"Based on {len(sources)} relevant sources from the document collection:",
+                "The sources address this topic through multiple perspectives.",
+                "Key findings from the sources include relevant insights on your question.",
                 "For detailed analysis, please review the cited sources below."
             ]
         }
@@ -814,20 +814,20 @@ async def api_chat_with_llm(
         citation_guide = "\n".join(citation_refs)
 
         # Build prompt for LLM
-        system_prompt = """You are an expert academic research assistant specializing in German regional economic transitions, institutional economics, and the Ruhr Valley transformation.
+        system_prompt = """You are an expert assistant.
 
-Answer questions based ONLY on the provided academic literature context. When citing sources, use the author-date format with citation number, like: "According to Author (Year) [1], ..." or "...as noted by Author (Year) [2]".
+Answer questions based ONLY on the provided document context. When citing sources, use the author-date format with citation number, like: "According to Author (Year) [1], ..." or "...as noted by Author (Year) [2]".
 
-Be precise, academic in tone, and synthesize information across multiple sources when relevant. If the context doesn't contain enough information to fully answer the question, acknowledge this limitation."""
+Be precise, concise, and synthesize information across multiple sources when relevant. If the context doesn't contain enough information to fully answer the question, acknowledge this limitation."""
 
-        user_prompt = f"""Based on the following academic literature excerpts, please answer this question:
+        user_prompt = f"""Based on the following document excerpts, please answer this question:
 
 QUESTION: {question}
 
 CITATION KEY:
 {citation_guide}
 
-ACADEMIC LITERATURE CONTEXT:
+DOCUMENT CONTEXT:
 {context}
 
 Please provide a well-structured answer using author-date citations (e.g., "According to Smith (2020) [1], ..."). Always include the author name and year when citing."""

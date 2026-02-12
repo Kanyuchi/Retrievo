@@ -78,11 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Try refresh via cookies
-      const refreshed = await refreshAuth();
-      if (!refreshed) {
-        clearTokens();
-      }
+      // If there's no saved token, skip refresh to avoid 401 noise for guests.
+      clearTokens();
 
       setIsLoading(false);
     };
