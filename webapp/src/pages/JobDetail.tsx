@@ -413,6 +413,8 @@ export default function JobDetail() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
+                  id="job-doc-search"
+                  name="jobDocumentSearch"
                   type="text"
                   placeholder={t('job_detail.search_documents')}
                   value={searchQuery}
@@ -582,6 +584,8 @@ export default function JobDetail() {
                   {t('job_detail.phase_label')}
                 </label>
                 <select
+                  id="upload-phase"
+                  name="uploadPhase"
                   value={uploadPhase}
                   onChange={(e) => setUploadPhase(e.target.value)}
                   disabled={isUploading}
@@ -601,6 +605,8 @@ export default function JobDetail() {
                   {t('job_detail.topic_label')}
                 </label>
                 <input
+                  id="upload-topic"
+                  name="uploadTopic"
                   type="text"
                   value={uploadTopic}
                   onChange={(e) => setUploadTopic(e.target.value)}
@@ -630,6 +636,8 @@ export default function JobDetail() {
                       </span>
                     </div>
                     <input
+                      id="upload-files"
+                      name="uploadFiles"
                       type="file"
                       accept=".pdf"
                       multiple

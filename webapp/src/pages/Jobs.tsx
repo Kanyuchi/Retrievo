@@ -69,6 +69,8 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
               {t('jobs.name_label')}
             </label>
             <input
+              id="job-name"
+              name="jobName"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -283,6 +285,8 @@ export default function Jobs() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
+              id="job-search"
+              name="jobSearch"
               type="text"
               placeholder={t('jobs.search_placeholder')}
               value={searchQuery}

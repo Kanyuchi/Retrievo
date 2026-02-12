@@ -466,6 +466,8 @@ export default function Files() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                id="files-search"
+                name="filesSearch"
                 placeholder={t('files.search_documents')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -474,6 +476,8 @@ export default function Files() {
             </div>
 
             <input
+              id="files-upload"
+              name="filesUpload"
               ref={fileInputRef}
               type="file"
               accept=".pdf"
