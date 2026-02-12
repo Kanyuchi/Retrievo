@@ -386,6 +386,14 @@ def _run_migrations():
                 conn.execute(text("ALTER TABLE documents ADD COLUMN doi VARCHAR(255)"))
             logger.info("Migration complete: doi added")
 
+    if inspector.has_table("knowledge_gaps"):
+        columns = [col["name"] for col in inspector.get_columns("knowledge_gaps")]
+        if "evidence_json" not in columns:
+            logger.info("Migrating: adding evidence_json column to knowledge_gaps table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE knowledge_gaps ADD COLUMN evidence_json TEXT"))
+            logger.info("Migration complete: evidence_json added")
+
     if inspector.has_table("jobs"):
         columns = [col["name"] for col in inspector.get_columns("jobs")]
         if "term_maps" not in columns:
