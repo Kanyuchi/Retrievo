@@ -184,7 +184,7 @@ class DocumentIndexer:
                     "topic_category": metadata.topic_category,
                     "total_pages": metadata.total_pages,
                     "filename": metadata.filename,
-                    "language": metadata.language
+                    "language": getattr(metadata, "language", None)
                 },
                 "success": True,
                 "error": None
@@ -235,7 +235,7 @@ class DocumentIndexer:
             "file_path": metadata.file_path,
             "abstract": metadata.abstract,
             "total_pages": metadata.total_pages,
-            "language": metadata.language
+            "language": getattr(metadata, "language", None)
         }
 
         # Extract keywords

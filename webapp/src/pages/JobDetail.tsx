@@ -580,7 +580,7 @@ export default function JobDetail() {
             <div className="space-y-4">
               {/* Phase Select */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label htmlFor="upload-phase" className="block text-sm font-medium text-foreground mb-1">
                   {t('job_detail.phase_label')}
                 </label>
                 <select
@@ -601,7 +601,7 @@ export default function JobDetail() {
 
               {/* Topic Input */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label htmlFor="upload-topic" className="block text-sm font-medium text-foreground mb-1">
                   {t('job_detail.topic_label')}
                 </label>
                 <input
@@ -624,7 +624,7 @@ export default function JobDetail() {
 
               {/* File Input */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label htmlFor="upload-files" className="block text-sm font-medium text-foreground mb-1">
                   {t('job_detail.upload_pdf')}
                 </label>
                 <div className="flex items-center gap-2">

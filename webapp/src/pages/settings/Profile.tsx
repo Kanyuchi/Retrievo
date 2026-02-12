@@ -47,9 +47,11 @@ export default function Profile() {
           <motion.div variants={itemVariants} className="space-y-6">
             {/* Name Field */}
             <div className="flex items-start gap-8">
-              <label className="w-24 pt-2 text-sm text-foreground">Name</label>
+              <span className="w-24 pt-2 text-sm text-foreground">Name</span>
               <div className="flex-1 flex items-center gap-3">
                 <Input
+                  id="profile-name"
+                  name="profileName"
                   value="Kanyuchi"
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
@@ -67,7 +69,7 @@ export default function Profile() {
 
             {/* Avatar Field */}
             <div className="flex items-start gap-8">
-              <label className="w-24 pt-2 text-sm text-foreground">Avatar</label>
+              <span className="w-24 pt-2 text-sm text-foreground">Avatar</span>
               <div className="flex-1 flex items-center gap-4">
                 <div className="relative">
                   <div className="w-16 h-16 rounded-lg bg-secondary flex items-center justify-center overflow-hidden border border-border">
@@ -83,9 +85,11 @@ export default function Profile() {
 
             {/* Time Zone Field */}
             <div className="flex items-start gap-8">
-              <label className="w-24 pt-2 text-sm text-foreground">Time zone</label>
+              <span className="w-24 pt-2 text-sm text-foreground">Time zone</span>
               <div className="flex-1 flex items-center gap-3">
                 <Input
+                  id="profile-timezone"
+                  name="profileTimezone"
                   value="UTC+8 Asia/Shanghai"
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
@@ -103,7 +107,7 @@ export default function Profile() {
 
             {/* Email Field */}
             <div className="flex items-start gap-8">
-              <label className="w-24 pt-2 text-sm text-foreground">Email</label>
+              <span className="w-24 pt-2 text-sm text-foreground">Email</span>
               <div className="flex-1">
                 <p className="text-foreground mb-1">shaunkudzi@gmail.com</p>
                 <p className="text-xs text-muted-foreground">Once registered, E-mail cannot be changed.</p>
@@ -112,9 +116,11 @@ export default function Profile() {
 
             {/* Password Field */}
             <div className="flex items-start gap-8">
-              <label className="w-24 pt-2 text-sm text-foreground">Password</label>
+              <span className="w-24 pt-2 text-sm text-foreground">Password</span>
               <div className="flex-1 flex items-center gap-3">
                 <Input
+                  id="profile-password"
+                  name="profilePassword"
                   type="password"
                   value="********"
                   readOnly

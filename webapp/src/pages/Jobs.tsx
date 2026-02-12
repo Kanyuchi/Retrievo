@@ -65,7 +65,7 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="job-name" className="block text-sm font-medium text-foreground mb-1">
               {t('jobs.name_label')}
             </label>
             <input
@@ -81,10 +81,12 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="job-description" className="block text-sm font-medium text-foreground mb-1">
               {t('jobs.description_label')}
             </label>
             <textarea
+              id="job-description"
+              name="jobDescription"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('jobs.description_placeholder')}
