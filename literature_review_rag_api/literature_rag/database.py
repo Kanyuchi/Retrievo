@@ -8,7 +8,7 @@ import os
 import logging
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, or_, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, or_, Float, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from enum import Enum
@@ -238,6 +238,37 @@ class KnowledgeGap(Base):
     def __repr__(self):
         return f"<KnowledgeGap(claim_id={self.claim_id}, gap_type={self.gap_type})>"
 
+
+class KnowledgeEntity(Base):
+    """Entity node for knowledge graph."""
+    __tablename__ = "knowledge_entities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    entity_type = Column(String(50), default="concept")
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<KnowledgeEntity(name={self.name}, type={self.entity_type})>"
+
+
+class KnowledgeEdge(Base):
+    """Relationship edge for knowledge graph."""
+    __tablename__ = "knowledge_edges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    source_entity_id = Column(Integer, ForeignKey("knowledge_entities.id"), nullable=False, index=True)
+    target_entity_id = Column(Integer, ForeignKey("knowledge_entities.id"), nullable=False, index=True)
+    relation_type = Column(String(50), default="related_to")
+    claim_id = Column(Integer, ForeignKey("knowledge_claims.id"), nullable=True, index=True)
+    weight = Column(Float, default=1.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<KnowledgeEdge(source={self.source_entity_id}, target={self.target_entity_id}, relation={self.relation_type})>"
 class ChatSession(Base):
     """Chat session for a job (knowledge base)."""
     __tablename__ = "chat_sessions"
@@ -393,6 +424,14 @@ def _run_migrations():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE knowledge_gaps ADD COLUMN evidence_json TEXT"))
             logger.info("Migration complete: evidence_json added")
+
+    # Ensure knowledge graph tables exist
+    if not inspector.has_table("knowledge_entities"):
+        logger.info("Migrating: creating knowledge_entities table")
+        Base.metadata.tables["knowledge_entities"].create(bind=engine)
+    if not inspector.has_table("knowledge_edges"):
+        logger.info("Migrating: creating knowledge_edges table")
+        Base.metadata.tables["knowledge_edges"].create(bind=engine)
 
     if inspector.has_table("jobs"):
         columns = [col["name"] for col in inspector.get_columns("jobs")]
@@ -733,6 +772,97 @@ class KnowledgeGapCRUD:
         db.query(KnowledgeGap).filter(
             KnowledgeGap.claim_id.in_(claim_ids)
         ).delete(synchronize_session=False)
+        db.commit()
+
+
+class KnowledgeEntityCRUD:
+    """CRUD operations for KnowledgeEntity model."""
+
+    @staticmethod
+    def get_or_create(db: Session, job_id: int, name: str, entity_type: str = "concept") -> KnowledgeEntity:
+        existing = db.query(KnowledgeEntity).filter(
+            KnowledgeEntity.job_id == job_id,
+            KnowledgeEntity.name == name
+        ).first()
+        if existing:
+            return existing
+        entity = KnowledgeEntity(
+            job_id=job_id,
+            name=name,
+            entity_type=entity_type
+        )
+        db.add(entity)
+        db.commit()
+        db.refresh(entity)
+        return entity
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int, limit: int = 500) -> List[KnowledgeEntity]:
+        return db.query(KnowledgeEntity).filter(
+            KnowledgeEntity.job_id == job_id
+        ).order_by(KnowledgeEntity.name.asc()).limit(limit).all()
+
+    @staticmethod
+    def count_for_job(db: Session, job_id: int) -> int:
+        return int(
+            db.query(func.count(KnowledgeEntity.id)).filter(
+                KnowledgeEntity.job_id == job_id
+            ).scalar() or 0
+        )
+
+    @staticmethod
+    def delete_for_job(db: Session, job_id: int) -> None:
+        db.query(KnowledgeEntity).filter(
+            KnowledgeEntity.job_id == job_id
+        ).delete()
+        db.commit()
+
+
+class KnowledgeEdgeCRUD:
+    """CRUD operations for KnowledgeEdge model."""
+
+    @staticmethod
+    def create(
+        db: Session,
+        job_id: int,
+        source_entity_id: int,
+        target_entity_id: int,
+        relation_type: str,
+        claim_id: Optional[int] = None,
+        weight: float = 1.0
+    ) -> KnowledgeEdge:
+        edge = KnowledgeEdge(
+            job_id=job_id,
+            source_entity_id=source_entity_id,
+            target_entity_id=target_entity_id,
+            relation_type=relation_type,
+            claim_id=claim_id,
+            weight=weight
+        )
+        db.add(edge)
+        db.commit()
+        db.refresh(edge)
+        return edge
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int, limit: int = 2000) -> List[KnowledgeEdge]:
+        return db.query(KnowledgeEdge).filter(
+            KnowledgeEdge.job_id == job_id
+        ).limit(limit).all()
+
+    @staticmethod
+    def count_for_job(db: Session, job_id: int) -> int:
+        return int(
+            db.query(func.count(KnowledgeEdge.id)).filter(
+                KnowledgeEdge.job_id == job_id
+            ).scalar() or 0
+        )
+
+    @staticmethod
+    def delete_for_job(db: Session, job_id: int) -> None:
+        db.query(KnowledgeEdge).filter(
+            KnowledgeEdge.job_id == job_id
+        ).delete()
         db.commit()
 
 

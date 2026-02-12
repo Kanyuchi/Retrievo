@@ -190,6 +190,13 @@ class InsightsConfig:
 
 
 @dataclass
+class GraphConfig:
+    """Knowledge graph configuration."""
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4.1-mini"
+
+
+@dataclass
 class NormalizationConfig:
     """Query normalization configuration."""
     enable: bool = True
@@ -350,6 +357,7 @@ class LiteratureRAGConfig:
     embedding: EmbeddingConfig
     retrieval: RetrievalConfig
     insights: InsightsConfig
+    graph: GraphConfig
     normalization: NormalizationConfig
     filters: FilterConfig
     api: APIConfig
@@ -400,6 +408,7 @@ def load_config(config_path: Optional[str] = None) -> LiteratureRAGConfig:
         embedding=_load_embedding_config(yaml_config.get("embedding", {}), env_settings),
         retrieval=_load_retrieval_config(yaml_config.get("retrieval", {})),
         insights=_load_insights_config(yaml_config.get("insights", {})),
+        graph=_load_graph_config(yaml_config.get("graph", {})),
         normalization=_load_normalization_config(yaml_config.get("normalization", {})),
         filters=_load_filter_config(yaml_config.get("filters", {})),
         api=_load_api_config(yaml_config.get("api", {}), env_settings),
@@ -527,6 +536,14 @@ def _load_insights_config(yaml_insights: dict) -> InsightsConfig:
         missing_threshold=yaml_insights.get("missing_threshold", 0.25),
         weak_threshold=yaml_insights.get("weak_threshold", 0.35),
         min_evidence=yaml_insights.get("min_evidence", 2)
+    )
+
+
+def _load_graph_config(yaml_graph: dict) -> GraphConfig:
+    """Load knowledge graph configuration."""
+    return GraphConfig(
+        llm_provider=yaml_graph.get("llm_provider", "openai"),
+        llm_model=yaml_graph.get("llm_model", "gpt-4.1-mini")
     )
 
 

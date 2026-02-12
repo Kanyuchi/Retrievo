@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Briefcase,
   Lightbulb,
+  Share2,
   HelpCircle,
   Moon,
   ChevronDown,
@@ -194,6 +195,10 @@ export default function MainNav() {
                 <DropdownMenuItem onClick={() => navigate('/insights')}>
                   <Lightbulb className="mr-2 h-4 w-4" />
                   {t('nav.insights')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/graph')}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {t('nav.graph')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/settings/data-sources')}>

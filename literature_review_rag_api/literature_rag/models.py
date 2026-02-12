@@ -393,6 +393,30 @@ class KnowledgeInsightsRunResponse(BaseModel):
     gaps_detected: int
 
 
+class KnowledgeGraphNode(BaseModel):
+    id: int
+    name: str
+    entity_type: str
+
+
+class KnowledgeGraphEdge(BaseModel):
+    source: int
+    target: int
+    relation_type: str
+    weight: float
+
+
+class KnowledgeGraphResponse(BaseModel):
+    nodes: List[KnowledgeGraphNode]
+    edges: List[KnowledgeGraphEdge]
+
+
+class KnowledgeGraphRunResponse(BaseModel):
+    claims_processed: int
+    entities_created: int
+    edges_created: int
+
+
 class DeleteResponse(BaseModel):
     """Response model for document deletion."""
     success: bool

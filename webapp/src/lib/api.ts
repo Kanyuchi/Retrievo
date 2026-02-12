@@ -140,6 +140,30 @@ export interface KnowledgeInsightsRunResponse {
   gaps_detected: number;
 }
 
+export interface KnowledgeGraphNode {
+  id: number;
+  name: string;
+  entity_type: string;
+}
+
+export interface KnowledgeGraphEdge {
+  source: number;
+  target: number;
+  relation_type: string;
+  weight: number;
+}
+
+export interface KnowledgeGraphResponse {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+}
+
+export interface KnowledgeGraphRunResponse {
+  claims_processed: number;
+  entities_created: number;
+  edges_created: number;
+}
+
 export interface QueryResponse {
   answer: string;
   documents: Array<{
@@ -1019,6 +1043,32 @@ class ApiClient {
       headers.Authorization = `Bearer ${accessToken}`;
     }
     return this.fetch(`/api/jobs/${jobId}/insights`, { headers });
+  }
+
+  // Knowledge graph
+  async buildKnowledgeGraph(
+    jobId: number,
+    accessToken?: string
+  ): Promise<KnowledgeGraphRunResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/graph/build`, {
+      method: 'POST',
+      headers,
+    });
+  }
+
+  async getKnowledgeGraph(
+    jobId: number,
+    accessToken?: string
+  ): Promise<KnowledgeGraphResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/graph`, { headers });
   }
 
   // Chat sessions (persisted chat history)

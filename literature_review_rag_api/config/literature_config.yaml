@@ -199,6 +199,10 @@ insights:
   llm_provider: "openai"
   llm_model: "gpt-4.1-mini"
 
+graph:
+  llm_provider: "openai"
+  llm_model: "gpt-4.1-mini"
+
 # ----------------------------------------------------------------------------
 # QUERY NORMALIZATION (KEY PATTERN FROM PERSONALITY RAG)
 # ----------------------------------------------------------------------------

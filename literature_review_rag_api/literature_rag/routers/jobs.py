@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..database import (
     get_db, User, Job, Document, JobCRUD, DocumentCRUD, DocumentRelationCRUD,
-    KnowledgeClaimCRUD, KnowledgeGapCRUD,
+    KnowledgeClaimCRUD, KnowledgeGapCRUD, KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
     JobStatus, DocumentStatus
 )
 from ..auth import get_current_user
@@ -504,6 +504,8 @@ async def delete_job(
             DocumentRelationCRUD.delete_for_job(db, job_id)
             KnowledgeGapCRUD.delete_for_job(db, job_id)
             KnowledgeClaimCRUD.delete_for_job(db, job_id)
+            KnowledgeEdgeCRUD.delete_for_job(db, job_id)
+            KnowledgeEntityCRUD.delete_for_job(db, job_id)
 
             # Delete all documents from storage
             documents = DocumentCRUD.get_job_documents(db, job_id)
@@ -588,6 +590,8 @@ async def clear_job_documents(
         DocumentRelationCRUD.delete_for_job(db, job_id)
         KnowledgeGapCRUD.delete_for_job(db, job_id)
         KnowledgeClaimCRUD.delete_for_job(db, job_id)
+        KnowledgeEdgeCRUD.delete_for_job(db, job_id)
+        KnowledgeEntityCRUD.delete_for_job(db, job_id)
 
         # Delete all documents from storage and database
         documents = DocumentCRUD.get_job_documents(db, job_id)
