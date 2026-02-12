@@ -184,7 +184,7 @@ export default function KnowledgeInsights() {
                   {claim.gaps.map((gap, idx) => (
                     gap.evidence && gap.evidence.length > 0 ? (
                       <div key={`${claim.id}-evidence-${idx}`} className="mt-3 space-y-2">
-                        {gap.evidence.map((ev, evIdx) => (
+                        {gap.evidence.map((ev: { doc_id?: string | null; title?: string | null; snippet?: string | null }, evIdx: number) => (
                           <div key={`${claim.id}-ev-${idx}-${evIdx}`} className="text-xs text-muted-foreground border border-border rounded-md p-2 bg-secondary/30">
                             <div className="font-medium text-foreground truncate">
                               {ev.title || ev.doc_id || t('insights.evidence_unknown')}

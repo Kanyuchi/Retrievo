@@ -113,6 +113,12 @@ export interface KnowledgeGapInfo {
   gap_type: string;
   best_score: number;
   evidence_count: number;
+  evidence: Array<{
+    doc_id?: string | null;
+    title?: string | null;
+    score?: number | null;
+    snippet?: string | null;
+  }>;
 }
 
 export interface KnowledgeClaimInfo {
