@@ -109,6 +109,31 @@ export interface ChatSessionDetailResponse {
   messages: ChatMessage[];
 }
 
+export interface KnowledgeGapInfo {
+  gap_type: string;
+  best_score: number;
+  evidence_count: number;
+}
+
+export interface KnowledgeClaimInfo {
+  id: number;
+  doc_id: string;
+  paragraph_index?: number | null;
+  claim_text: string;
+  gaps: KnowledgeGapInfo[];
+}
+
+export interface KnowledgeInsightsResponse {
+  total_claims: number;
+  claims: KnowledgeClaimInfo[];
+}
+
+export interface KnowledgeInsightsRunResponse {
+  documents_processed: number;
+  claims_extracted: number;
+  gaps_detected: number;
+}
+
 export interface QueryResponse {
   answer: string;
   documents: Array<{
@@ -962,6 +987,32 @@ class ApiClient {
     if (options?.topic_filter) searchParams.set('topic_filter', options.topic_filter);
     if (options?.deep_analysis) searchParams.set('deep_analysis', 'true');
     return this.fetch(`/api/jobs/${jobId}/chat?${searchParams.toString()}`, { headers });
+  }
+
+  // Knowledge insights (claims + gaps)
+  async runKnowledgeInsights(
+    jobId: number,
+    accessToken?: string
+  ): Promise<KnowledgeInsightsRunResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/insights/run`, {
+      method: 'POST',
+      headers,
+    });
+  }
+
+  async getKnowledgeInsights(
+    jobId: number,
+    accessToken?: string
+  ): Promise<KnowledgeInsightsResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/insights`, { headers });
   }
 
   // Chat sessions (persisted chat history)

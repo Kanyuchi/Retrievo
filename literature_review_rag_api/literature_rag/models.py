@@ -367,6 +367,31 @@ class DocumentRelationListResponse(BaseModel):
     relations: List[DocumentRelationInfo] = Field(..., description="List of related documents")
 
 
+class KnowledgeGapInfo(BaseModel):
+    gap_type: str
+    best_score: float
+    evidence_count: int
+
+
+class KnowledgeClaimInfo(BaseModel):
+    id: int
+    doc_id: str
+    paragraph_index: Optional[int]
+    claim_text: str
+    gaps: List[KnowledgeGapInfo] = Field(default_factory=list)
+
+
+class KnowledgeInsightsResponse(BaseModel):
+    total_claims: int
+    claims: List[KnowledgeClaimInfo]
+
+
+class KnowledgeInsightsRunResponse(BaseModel):
+    documents_processed: int
+    claims_extracted: int
+    gaps_detected: int
+
+
 class DeleteResponse(BaseModel):
     """Response model for document deletion."""
     success: bool

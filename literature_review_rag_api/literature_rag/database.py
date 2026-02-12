@@ -207,6 +207,36 @@ class DocumentRelation(Base):
     def __repr__(self):
         return f"<DocumentRelation(doc_id={self.doc_id}, related_doc_id={self.related_doc_id}, score={self.score})>"
 
+class KnowledgeClaim(Base):
+    """Paragraph-level claims extracted from documents."""
+    __tablename__ = "knowledge_claims"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    doc_id = Column(String(255), nullable=False, index=True)
+    paragraph_index = Column(Integer, nullable=True)
+    claim_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<KnowledgeClaim(doc_id={self.doc_id}, paragraph_index={self.paragraph_index})>"
+
+
+class KnowledgeGap(Base):
+    """Gaps detected for claims."""
+    __tablename__ = "knowledge_gaps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    claim_id = Column(Integer, ForeignKey("knowledge_claims.id"), nullable=False, index=True)
+    gap_type = Column(String(50), nullable=False)  # missing_evidence | weak_coverage
+    best_score = Column(Float, default=0.0)
+    evidence_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<KnowledgeGap(claim_id={self.claim_id}, gap_type={self.gap_type})>"
+
 class ChatSession(Base):
     """Chat session for a job (knowledge base)."""
     __tablename__ = "chat_sessions"
@@ -604,6 +634,95 @@ class DocumentRelationCRUD:
             DocumentRelation.job_id == job_id,
             DocumentRelation.doc_id == doc_id
         ).order_by(DocumentRelation.score.desc()).limit(limit).all()
+
+
+class KnowledgeClaimCRUD:
+    """CRUD operations for KnowledgeClaim model."""
+
+    @staticmethod
+    def create(db: Session, job_id: int, doc_id: str, claim_text: str, paragraph_index: Optional[int]) -> KnowledgeClaim:
+        claim = KnowledgeClaim(
+            job_id=job_id,
+            doc_id=doc_id,
+            claim_text=claim_text,
+            paragraph_index=paragraph_index
+        )
+        db.add(claim)
+        db.commit()
+        db.refresh(claim)
+        return claim
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int, limit: int = 200) -> List[KnowledgeClaim]:
+        return db.query(KnowledgeClaim).filter(
+            KnowledgeClaim.job_id == job_id
+        ).order_by(KnowledgeClaim.created_at.desc()).limit(limit).all()
+
+    @staticmethod
+    def delete_for_job(db: Session, job_id: int) -> None:
+        db.query(KnowledgeClaim).filter(
+            KnowledgeClaim.job_id == job_id
+        ).delete()
+        db.commit()
+
+    @staticmethod
+    def delete_for_doc(db: Session, job_id: int, doc_id: str) -> List[int]:
+        claims = db.query(KnowledgeClaim).filter(
+            KnowledgeClaim.job_id == job_id,
+            KnowledgeClaim.doc_id == doc_id
+        ).all()
+        claim_ids = [c.id for c in claims]
+        for claim in claims:
+            db.delete(claim)
+        db.commit()
+        return claim_ids
+
+
+class KnowledgeGapCRUD:
+    """CRUD operations for KnowledgeGap model."""
+
+    @staticmethod
+    def create(
+        db: Session,
+        job_id: int,
+        claim_id: int,
+        gap_type: str,
+        best_score: float,
+        evidence_count: int
+    ) -> KnowledgeGap:
+        gap = KnowledgeGap(
+            job_id=job_id,
+            claim_id=claim_id,
+            gap_type=gap_type,
+            best_score=best_score,
+            evidence_count=evidence_count
+        )
+        db.add(gap)
+        db.commit()
+        db.refresh(gap)
+        return gap
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int) -> List[KnowledgeGap]:
+        return db.query(KnowledgeGap).filter(
+            KnowledgeGap.job_id == job_id
+        ).all()
+
+    @staticmethod
+    def delete_for_job(db: Session, job_id: int) -> None:
+        db.query(KnowledgeGap).filter(
+            KnowledgeGap.job_id == job_id
+        ).delete()
+        db.commit()
+
+    @staticmethod
+    def delete_for_claims(db: Session, claim_ids: List[int]) -> None:
+        if not claim_ids:
+            return
+        db.query(KnowledgeGap).filter(
+            KnowledgeGap.claim_id.in_(claim_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
 
 
 class ChatSessionCRUD:

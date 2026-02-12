@@ -9,6 +9,7 @@ import {
   Bot,
   FolderOpen,
   Briefcase,
+  Lightbulb,
   HelpCircle,
   Moon,
   ChevronDown,
@@ -45,6 +46,7 @@ export default function MainNav() {
     { path: '/agents', label: t('nav.agent'), icon: Bot },
     { path: '/files', label: t('nav.files'), icon: FolderOpen },
     { path: '/jobs', label: t('nav.jobs'), icon: Briefcase },
+    { path: '/insights', label: t('nav.insights'), icon: Lightbulb },
   ];
 
   const handleLogout = async () => {

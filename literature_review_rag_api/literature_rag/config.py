@@ -177,6 +177,17 @@ class RetrievalConfig:
 
 
 @dataclass
+class InsightsConfig:
+    """Knowledge insights configuration."""
+    max_doc_chars: int = 12000
+    max_paragraphs: int = 12
+    max_claims_per_doc: int = 8
+    missing_threshold: float = 0.25
+    weak_threshold: float = 0.35
+    min_evidence: int = 2
+
+
+@dataclass
 class NormalizationConfig:
     """Query normalization configuration."""
     enable: bool = True
@@ -336,6 +347,7 @@ class LiteratureRAGConfig:
     chunking: ChunkingConfig
     embedding: EmbeddingConfig
     retrieval: RetrievalConfig
+    insights: InsightsConfig
     normalization: NormalizationConfig
     filters: FilterConfig
     api: APIConfig
@@ -385,6 +397,7 @@ def load_config(config_path: Optional[str] = None) -> LiteratureRAGConfig:
         chunking=_load_chunking_config(yaml_config.get("chunking", {})),
         embedding=_load_embedding_config(yaml_config.get("embedding", {}), env_settings),
         retrieval=_load_retrieval_config(yaml_config.get("retrieval", {})),
+        insights=_load_insights_config(yaml_config.get("insights", {})),
         normalization=_load_normalization_config(yaml_config.get("normalization", {})),
         filters=_load_filter_config(yaml_config.get("filters", {})),
         api=_load_api_config(yaml_config.get("api", {}), env_settings),
@@ -500,6 +513,18 @@ def _load_retrieval_config(yaml_retrieval: dict) -> RetrievalConfig:
         distance_metric=yaml_retrieval.get("distance_metric", "cosine"),
         language_filter_enabled=yaml_retrieval.get("language_filter_enabled", True),
         language_filter_fallback=yaml_retrieval.get("language_filter_fallback", True)
+    )
+
+
+def _load_insights_config(yaml_insights: dict) -> InsightsConfig:
+    """Load knowledge insights configuration."""
+    return InsightsConfig(
+        max_doc_chars=yaml_insights.get("max_doc_chars", 12000),
+        max_paragraphs=yaml_insights.get("max_paragraphs", 12),
+        max_claims_per_doc=yaml_insights.get("max_claims_per_doc", 8),
+        missing_threshold=yaml_insights.get("missing_threshold", 0.25),
+        weak_threshold=yaml_insights.get("weak_threshold", 0.35),
+        min_evidence=yaml_insights.get("min_evidence", 2)
     )
 
 

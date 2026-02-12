@@ -187,6 +187,17 @@ retrieval:
   language_filter_fallback: true  # Retry without language filter if no results
 
 # ----------------------------------------------------------------------------
+# KNOWLEDGE INSIGHTS (CLAIMS + GAPS)
+# ----------------------------------------------------------------------------
+insights:
+  max_doc_chars: 12000
+  max_paragraphs: 12
+  max_claims_per_doc: 8
+  missing_threshold: 0.25
+  weak_threshold: 0.35
+  min_evidence: 2
+
+# ----------------------------------------------------------------------------
 # QUERY NORMALIZATION (KEY PATTERN FROM PERSONALITY RAG)
 # ----------------------------------------------------------------------------
 # This is the "secret sauce" - explicit term normalization like MBTI codes

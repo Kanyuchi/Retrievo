@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
+import KnowledgeInsights from './pages/KnowledgeInsights';
 import DataSources from './pages/settings/DataSources';
 import ModelProviders from './pages/settings/ModelProviders';
 import MCP from './pages/settings/MCP';
@@ -65,6 +66,7 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/jobs/:jobId" element={<JobDetail />} />
+              <Route path="/insights" element={<KnowledgeInsights />} />
               <Route path="/settings/data-sources" element={<DataSources />} />
               <Route path="/settings/model-providers" element={<ModelProviders />} />
               <Route path="/settings/mcp" element={<MCP />} />
