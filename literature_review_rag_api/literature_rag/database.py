@@ -232,6 +232,7 @@ class KnowledgeGap(Base):
     gap_type = Column(String(50), nullable=False)  # missing_evidence | weak_coverage
     best_score = Column(Float, default=0.0)
     evidence_count = Column(Integer, default=0)
+    evidence_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -688,14 +689,16 @@ class KnowledgeGapCRUD:
         claim_id: int,
         gap_type: str,
         best_score: float,
-        evidence_count: int
+        evidence_count: int,
+        evidence_json: Optional[str] = None
     ) -> KnowledgeGap:
         gap = KnowledgeGap(
             job_id=job_id,
             claim_id=claim_id,
             gap_type=gap_type,
             best_score=best_score,
-            evidence_count=evidence_count
+            evidence_count=evidence_count,
+            evidence_json=evidence_json
         )
         db.add(gap)
         db.commit()

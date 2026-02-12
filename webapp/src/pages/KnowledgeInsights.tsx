@@ -128,11 +128,11 @@ export default function KnowledgeInsights() {
             <p className="text-2xl font-bold text-foreground">{claims.length}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">{t('insights.missing_evidence')}</p>
+            <p className="text-sm text-muted-foreground">{t('insights.low_support')}</p>
             <p className="text-2xl font-bold text-foreground">{missingCount}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">{t('insights.weak_coverage')}</p>
+            <p className="text-sm text-muted-foreground">{t('insights.sparse_support')}</p>
             <p className="text-2xl font-bold text-foreground">{weakCount}</p>
           </div>
         </div>
@@ -171,8 +171,8 @@ export default function KnowledgeInsights() {
                           }`}
                         >
                           {gap.gap_type === 'missing_evidence'
-                            ? t('insights.missing_evidence')
-                            : t('insights.weak_coverage')}
+                            ? t('insights.low_support')
+                            : t('insights.sparse_support')}
                         </span>
                       ))}
                     </div>
@@ -181,6 +181,22 @@ export default function KnowledgeInsights() {
                     {t('insights.doc_id')}: {claim.doc_id}
                     {claim.paragraph_index ? ` · ${t('insights.paragraph')} ${claim.paragraph_index}` : ''}
                   </p>
+                  {claim.gaps.map((gap, idx) => (
+                    gap.evidence && gap.evidence.length > 0 ? (
+                      <div key={`${claim.id}-evidence-${idx}`} className="mt-3 space-y-2">
+                        {gap.evidence.map((ev, evIdx) => (
+                          <div key={`${claim.id}-ev-${idx}-${evIdx}`} className="text-xs text-muted-foreground border border-border rounded-md p-2 bg-secondary/30">
+                            <div className="font-medium text-foreground truncate">
+                              {ev.title || ev.doc_id || t('insights.evidence_unknown')}
+                            </div>
+                            <div className="mt-1">
+                              {ev.snippet}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  ))}
                 </div>
               ))
             )}

@@ -189,9 +189,11 @@ async def run_knowledge_insights(
                 result = collection.query(
                     query_embeddings=[query_vec],
                     n_results=5,
-                    include=["distances"]
+                    include=["distances", "documents", "metadatas"]
                 )
                 distances = result.get("distances", [[]])[0] or []
+                documents = result.get("documents", [[]])[0] or []
+                metadatas = result.get("metadatas", [[]])[0] or []
                 if distances:
                     best_score = max(0.0, 1.0 - float(distances[0]))
                     evidence_count = sum(1 for d in distances if (1.0 - float(d)) >= weak_threshold)
@@ -201,6 +203,18 @@ async def run_knowledge_insights(
             except Exception:
                 best_score = 0.0
                 evidence_count = 0
+                documents = []
+                metadatas = []
+
+            evidence_snippets = []
+            for doc_text, meta, dist in zip(documents[:2], metadatas[:2], distances[:2]):
+                score = max(0.0, 1.0 - float(dist)) if dist is not None else 0.0
+                evidence_snippets.append({
+                    "doc_id": meta.get("doc_id") if meta else None,
+                    "title": meta.get("title") if meta else None,
+                    "score": score,
+                    "snippet": (doc_text or "")[:300]
+                })
 
             if best_score < missing_threshold:
                 KnowledgeGapCRUD.create(
@@ -209,7 +223,8 @@ async def run_knowledge_insights(
                     claim_id=claim_record.id,
                     gap_type="missing_evidence",
                     best_score=best_score,
-                    evidence_count=evidence_count
+                    evidence_count=evidence_count,
+                    evidence_json=json.dumps(evidence_snippets)
                 )
                 gaps_detected += 1
             elif evidence_count < min_evidence:
@@ -219,7 +234,8 @@ async def run_knowledge_insights(
                     claim_id=claim_record.id,
                     gap_type="weak_coverage",
                     best_score=best_score,
-                    evidence_count=evidence_count
+                    evidence_count=evidence_count,
+                    evidence_json=json.dumps(evidence_snippets)
                 )
                 gaps_detected += 1
 
@@ -250,10 +266,17 @@ async def get_knowledge_insights(
     gaps = KnowledgeGapCRUD.list_for_job(db, job_id)
     gaps_by_claim = {}
     for gap in gaps:
+        evidence = []
+        if gap.evidence_json:
+            try:
+                evidence = json.loads(gap.evidence_json)
+            except Exception:
+                evidence = []
         gaps_by_claim.setdefault(gap.claim_id, []).append({
             "gap_type": gap.gap_type,
             "best_score": gap.best_score,
-            "evidence_count": gap.evidence_count
+            "evidence_count": gap.evidence_count,
+            "evidence": evidence
         })
 
     return {

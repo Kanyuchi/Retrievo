@@ -371,6 +371,7 @@ class KnowledgeGapInfo(BaseModel):
     gap_type: str
     best_score: float
     evidence_count: int
+    evidence: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class KnowledgeClaimInfo(BaseModel):
