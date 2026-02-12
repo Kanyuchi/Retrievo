@@ -83,7 +83,7 @@ export default function MainNav() {
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-1 bg-secondary/50 rounded-full p-1">
+        <nav className="hidden xl:flex items-center gap-1 bg-secondary/50 rounded-full p-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
