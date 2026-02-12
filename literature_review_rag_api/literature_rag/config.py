@@ -185,6 +185,8 @@ class InsightsConfig:
     missing_threshold: float = 0.25
     weak_threshold: float = 0.35
     min_evidence: int = 2
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4.1-mini"
 
 
 @dataclass

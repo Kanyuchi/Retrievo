@@ -65,15 +65,28 @@ def _extract_claims_from_paragraphs(paragraphs: list[tuple[int, str]]) -> list[d
     if not paragraphs:
         return []
 
-    groq_api_key = config.llm.groq_api_key or os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Groq API key not configured for claim extraction"
-        )
+    insights_config = getattr(config, "insights", None)
+    provider = getattr(insights_config, "llm_provider", "openai")
+    model = getattr(insights_config, "llm_model", "gpt-4.1-mini")
 
-    from groq import Groq
-    groq_client = Groq(api_key=groq_api_key)
+    if provider == "openai":
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OPENAI_API_KEY not configured for claim extraction"
+            )
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_api_key)
+    else:
+        groq_api_key = config.llm.groq_api_key or os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Groq API key not configured for claim extraction"
+            )
+        from groq import Groq
+        client = Groq(api_key=groq_api_key)
 
     numbered = "\n\n".join([f"[{idx}] {para}" for idx, para in paragraphs])
 
@@ -86,8 +99,8 @@ def _extract_claims_from_paragraphs(paragraphs: list[tuple[int, str]]) -> list[d
         "JSON:"
     )
 
-    response = groq_client.chat.completions.create(
-        model=config.llm.model,
+    response = client.chat.completions.create(
+        model=model if provider == "openai" else config.llm.model,
         temperature=0.1,
         max_tokens=800,
         messages=[

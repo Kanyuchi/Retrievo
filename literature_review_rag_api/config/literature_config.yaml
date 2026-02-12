@@ -196,6 +196,8 @@ insights:
   missing_threshold: 0.25
   weak_threshold: 0.35
   min_evidence: 2
+  llm_provider: "openai"
+  llm_model: "gpt-4.1-mini"
 
 # ----------------------------------------------------------------------------
 # QUERY NORMALIZATION (KEY PATTERN FROM PERSONALITY RAG)
