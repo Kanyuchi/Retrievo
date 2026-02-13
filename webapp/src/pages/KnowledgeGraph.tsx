@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
@@ -24,12 +24,12 @@ function useCytoscape(
   nodes: KnowledgeGraphNode[],
   edges: KnowledgeGraphEdge[],
   isLoading: boolean,
+  container: HTMLDivElement | null,
   cyInstance: cytoscape.Core | null,
   setCyInstance: (cy: cytoscape.Core | null) => void
 ) {
   useEffect(() => {
     if (isLoading) return;
-    const container = document.getElementById('graph-view');
     if (!container) return;
     if (cyInstance) {
       cyInstance.destroy();
@@ -91,11 +91,20 @@ function useCytoscape(
       } as any
     });
 
+    cy.ready(() => {
+      cy.resize();
+      cy.fit();
+    });
+    setTimeout(() => {
+      cy.resize();
+      cy.fit();
+    }, 0);
+
     setCyInstance(cy);
     return () => {
       cy.destroy();
     };
-  }, [nodes, edges, isLoading, cyInstance, setCyInstance]);
+  }, [nodes, edges, isLoading, container, cyInstance, setCyInstance]);
 }
 
 export default function KnowledgeGraph() {
@@ -110,6 +119,7 @@ export default function KnowledgeGraph() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cyInstance, setCyInstance] = useState<cytoscape.Core | null>(null);
+  const graphRef = useRef<HTMLDivElement | null>(null);
 
   const jobId = selectedKB && !selectedKB.isDefault ? Number(selectedKB.id) : null;
 
@@ -158,11 +168,17 @@ export default function KnowledgeGraph() {
 
   const renderNodes = useMemo(() => nodes.slice(0, 200), [nodes]);
   const renderEdges = useMemo(
-    () => edges.filter(e => renderNodes.find(n => n.id === e.source) && renderNodes.find(n => n.id === e.target)).slice(0, 400),
+    () =>
+      edges
+        .filter(e =>
+          renderNodes.find(n => String(n.id) === String(e.source))
+          && renderNodes.find(n => String(n.id) === String(e.target))
+        )
+        .slice(0, 400),
     [edges, renderNodes]
   );
 
-  useCytoscape(renderNodes, renderEdges, isLoading, cyInstance, setCyInstance);
+  useCytoscape(renderNodes, renderEdges, isLoading, graphRef.current, cyInstance, setCyInstance);
 
   if (authLoading || (!isAuthenticated && !authLoading)) {
     return (
@@ -239,6 +255,7 @@ export default function KnowledgeGraph() {
               <h3 className="font-semibold text-foreground mb-3">{t('graph.visual')}</h3>
               <div
                 id="graph-view"
+                ref={graphRef}
                 className="bg-background rounded-lg border border-border"
                 style={{ height: 420 }}
               />

@@ -40,6 +40,17 @@ class LiteratureReviewRAG:
         self.config = config or {}
         self.normalization_enabled = self.config.get("normalization_enable", True)
         self._use_pool = use_pool
+        # Retrieval settings can come from a config object or a dict (API default collection)
+        if hasattr(self.config, "retrieval"):
+            self._retrieval_config = {
+                "language_filter_enabled": getattr(self.config.retrieval, "language_filter_enabled", False),
+                "language_filter_fallback": getattr(self.config.retrieval, "language_filter_fallback", True),
+            }
+        else:
+            self._retrieval_config = {
+                "language_filter_enabled": self.config.get("language_filter_enabled", False),
+                "language_filter_fallback": self.config.get("language_filter_fallback", True),
+            }
 
         # Embedding provider selection (OpenAI only)
         provider = "openai"
@@ -403,7 +414,7 @@ class LiteratureReviewRAG:
             conditions.append({"research_type": research_type_filter})
 
         language_filter_applied = False
-        if self.config.retrieval.language_filter_enabled:
+        if self._retrieval_config.get("language_filter_enabled", False):
             language = detect_language(question)
             if language and language != "unknown":
                 language_filter_applied = True
@@ -426,7 +437,7 @@ class LiteratureReviewRAG:
 
         if (
             language_filter_applied
-            and self.config.retrieval.language_filter_fallback
+            and self._retrieval_config.get("language_filter_fallback", True)
             and (not results or not results.get("documents") or not results["documents"][0])
         ):
             fallback_conditions = []

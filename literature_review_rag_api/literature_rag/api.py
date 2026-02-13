@@ -103,6 +103,8 @@ async def lifespan(app: FastAPI):
                 "bm25_min_token_length": config.retrieval.bm25_min_token_length,
                 "indices_path": config.storage.indices_path,
                 "openai_model": config.embedding.openai_model,
+                "language_filter_enabled": config.retrieval.language_filter_enabled,
+                "language_filter_fallback": config.retrieval.language_filter_fallback,
             },
             openai_model=config.embedding.openai_model
         )
