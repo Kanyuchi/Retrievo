@@ -154,6 +154,16 @@ export interface KnowledgeGraphEdge {
   weight: number;
 }
 
+export interface DataSourceConnection {
+  provider: string;
+  status: string;
+  config: Record<string, string>;
+}
+
+export interface DataSourceConnectionListResponse {
+  connections: DataSourceConnection[];
+}
+
 export interface KnowledgeGraphResponse {
   nodes: KnowledgeGraphNode[];
   edges: KnowledgeGraphEdge[];
@@ -1070,6 +1080,42 @@ class ApiClient {
       headers.Authorization = `Bearer ${accessToken}`;
     }
     return this.fetch(`/api/jobs/${jobId}/graph`, { headers });
+  }
+
+  // Data sources
+  async listDataSources(accessToken?: string): Promise<DataSourceConnectionListResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/settings/data-sources', { headers });
+  }
+
+  async upsertDataSource(
+    provider: string,
+    config: Record<string, string>,
+    accessToken?: string
+  ): Promise<DataSourceConnection> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/settings/data-sources/${provider}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ config }),
+    });
+  }
+
+  async deleteDataSource(provider: string, accessToken?: string): Promise<{ success: boolean }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/settings/data-sources/${provider}`, {
+      method: 'DELETE',
+      headers,
+    });
   }
 
   // Chat sessions (persisted chat history)

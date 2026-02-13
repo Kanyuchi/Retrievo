@@ -418,6 +418,21 @@ class KnowledgeGraphRunResponse(BaseModel):
     edges_created: int
 
 
+class DataSourceConnectionInfo(BaseModel):
+    provider: str
+    status: str
+    config: Dict[str, str] = Field(default_factory=dict)
+
+
+class DataSourceConnectionListResponse(BaseModel):
+    connections: List[DataSourceConnectionInfo]
+
+
+class DataSourceConnectionUpsertRequest(BaseModel):
+    config: Dict[str, str]
+    status: Optional[str] = "configured"
+
+
 class DeleteResponse(BaseModel):
     """Response model for document deletion."""
     success: bool

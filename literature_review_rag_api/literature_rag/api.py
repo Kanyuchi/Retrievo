@@ -355,12 +355,14 @@ from .routers.jobs import router as jobs_router
 from .routers.chats import router as chats_router
 from .routers.insights import router as insights_router
 from .routers.graph import router as graph_router
+from .routers.data_sources import router as data_sources_router
 
 app.include_router(auth_router)
 app.include_router(jobs_router)
 app.include_router(chats_router)
 app.include_router(insights_router)
 app.include_router(graph_router)
+app.include_router(data_sources_router)
 
 
 # ============================================================================

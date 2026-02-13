@@ -359,6 +359,22 @@ class RefreshToken(Base):
         return f"<RefreshToken(id={self.id}, user_id={self.user_id})>"
 
 
+class DataSourceConnection(Base):
+    """Stored data source configuration per user."""
+    __tablename__ = "data_source_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String(50), nullable=False, index=True)
+    status = Column(String(20), default="configured")  # configured | disabled
+    config_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<DataSourceConnection(user_id={self.user_id}, provider={self.provider})>"
+
+
 class UploadTaskRecord(Base):
     """Async upload task record."""
     __tablename__ = "upload_tasks"
@@ -440,6 +456,10 @@ def _run_migrations():
     if not inspector.has_table("knowledge_edges"):
         logger.info("Migrating: creating knowledge_edges table")
         Base.metadata.tables["knowledge_edges"].create(bind=engine)
+
+    if not inspector.has_table("data_source_connections"):
+        logger.info("Migrating: creating data_source_connections table")
+        Base.metadata.tables["data_source_connections"].create(bind=engine)
 
     if inspector.has_table("jobs"):
         columns = [col["name"] for col in inspector.get_columns("jobs")]
@@ -961,6 +981,57 @@ class ChatMessageCRUD:
         db.commit()
         db.refresh(message)
         return message
+
+
+class DataSourceConnectionCRUD:
+    """CRUD for data source connections."""
+
+    @staticmethod
+    def list_for_user(db: Session, user_id: int) -> List[DataSourceConnection]:
+        return db.query(DataSourceConnection).filter(
+            DataSourceConnection.user_id == user_id
+        ).order_by(DataSourceConnection.provider.asc()).all()
+
+    @staticmethod
+    def get_for_user_provider(db: Session, user_id: int, provider: str) -> Optional[DataSourceConnection]:
+        return db.query(DataSourceConnection).filter(
+            DataSourceConnection.user_id == user_id,
+            DataSourceConnection.provider == provider
+        ).first()
+
+    @staticmethod
+    def upsert(
+        db: Session,
+        user_id: int,
+        provider: str,
+        config_json: str,
+        status: str = "configured"
+    ) -> DataSourceConnection:
+        existing = DataSourceConnectionCRUD.get_for_user_provider(db, user_id, provider)
+        if existing:
+            existing.config_json = config_json
+            existing.status = status
+            db.commit()
+            db.refresh(existing)
+            return existing
+        conn = DataSourceConnection(
+            user_id=user_id,
+            provider=provider,
+            status=status,
+            config_json=config_json
+        )
+        db.add(conn)
+        db.commit()
+        db.refresh(conn)
+        return conn
+
+    @staticmethod
+    def delete(db: Session, user_id: int, provider: str) -> None:
+        db.query(DataSourceConnection).filter(
+            DataSourceConnection.user_id == user_id,
+            DataSourceConnection.provider == provider
+        ).delete()
+        db.commit()
 
     @staticmethod
     def list_for_session(db: Session, session_id: int) -> List[ChatMessage]:

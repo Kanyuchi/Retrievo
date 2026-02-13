@@ -1,7 +1,12 @@
 import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import SettingsSidebar from '@/components/SettingsSidebar';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -27,77 +32,130 @@ const itemVariants = {
 
 const dataSources = [
   {
+    id: 'google_drive',
+    name: 'Google Drive',
+    description: 'Connect Google Drive via OAuth and sync folders or shared drives.',
+    color: '#0066DA',
+    fields: [
+      { key: 'client_id', label: 'Client ID' },
+      { key: 'client_secret', label: 'Client Secret' },
+      { key: 'redirect_uri', label: 'Redirect URI' },
+    ],
+  },
+  {
+    id: 'onedrive',
+    name: 'OneDrive / SharePoint',
+    description: 'Connect Microsoft OneDrive or SharePoint with tenant OAuth.',
+    color: '#2563EB',
+    fields: [
+      { key: 'tenant_id', label: 'Tenant ID' },
+      { key: 'client_id', label: 'Client ID' },
+      { key: 'client_secret', label: 'Client Secret' },
+      { key: 'redirect_uri', label: 'Redirect URI' },
+    ],
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Sync pages and databases from Notion for retrieval.',
+    color: '#000000',
+    fields: [
+      { key: 'integration_token', label: 'Integration Token' },
+    ],
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    description: 'Index repositories, issues, and documentation from GitHub.',
+    color: '#0F172A',
+    fields: [
+      { key: 'client_id', label: 'Client ID' },
+      { key: 'client_secret', label: 'Client Secret' },
+      { key: 'org', label: 'Organization (optional)' },
+      { key: 'repo', label: 'Repository (optional)' },
+      { key: 'redirect_uri', label: 'Redirect URI' },
+    ],
+  },
+  {
+    id: 'confluence',
     name: 'Confluence',
     description: 'Integrate your Confluence workspace to search documentation.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#0052CC">
-        <path d="M2.258 14.366c-.057.181-.102.365-.134.55-.123.756.042 1.538.47 2.186l.02.03c.68 1.044 1.86 1.654 3.096 1.617l.213-.01c1.1-.083 2.118-.595 2.814-1.418l.078-.093c.588-.727.907-1.64.893-2.577l-.004-.183c-.04-1.187-.584-2.302-1.483-3.052l-.133-.11-4.83 3.06zm19.484-4.732c.057-.181.102-.365.134-.55.123-.756-.042-1.538-.47-2.186l-.02-.03c-.68-1.044-1.86-1.654-3.096-1.617l-.213.01c-1.1.083-2.118.595-2.814 1.418l-.078.093c-.588.727-.907 1.64-.893 2.577l.004.183c.04 1.187.584 2.302 1.483 3.052l.133.11 4.83-3.06z"/>
-      </svg>
-    ),
     color: '#0052CC',
-  },
-  {
-    name: 'S3',
-    description: 'Connect to your AWS S3 bucket to import and sync stored files.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#FF9900">
-        <path d="M6.763 10.036c0 .296.032.535.088.71.064.176.144.368.256.576.04.063.056.127.056.183 0 .08-.048.16-.152.24l-.503.335a.383.383 0 0 1-.208.072c-.08 0-.16-.04-.239-.112a2.47 2.47 0 0 1-.287-.375 6.18 6.18 0 0 1-.248-.471c-.622.734-1.405 1.101-2.347 1.101-.67 0-1.205-.191-1.596-.574-.391-.384-.59-.894-.59-1.533 0-.678.239-1.23.726-1.644.487-.415 1.133-.623 1.955-.623.272 0 .551.024.846.064.296.04.6.104.918.176v-.583c0-.607-.127-1.03-.375-1.277-.255-.248-.686-.367-1.3-.367-.28 0-.568.031-.863.103-.295.072-.583.16-.863.279a2.01 2.01 0 0 1-.28.104.488.488 0 0 1-.127.023c-.112 0-.168-.08-.168-.247v-.391c0-.128.016-.224.056-.28a.597.597 0 0 1 .224-.167c.279-.144.614-.264 1.005-.36a4.84 4.84 0 0 1 1.246-.151c.95 0 1.644.216 2.091.647.439.43.662 1.085.662 1.963v2.586zm-3.24 1.214c.263 0 .534-.048.822-.144.287-.096.543-.271.758-.51.128-.152.224-.32.272-.512.047-.191.08-.423.08-.694v-.335a6.66 6.66 0 0 0-.735-.136 6.02 6.02 0 0 0-.75-.048c-.535 0-.926.104-1.19.32-.263.215-.39.518-.39.917 0 .375.095.655.295.846.191.2.47.296.838.296zm6.41.862c-.144 0-.24-.024-.304-.08-.064-.048-.12-.16-.168-.311L7.586 5.55a1.398 1.398 0 0 1-.072-.32c0-.128.064-.2.191-.2h.783c.151 0 .255.025.31.08.065.048.113.16.16.312l1.342 5.284 1.245-5.284c.04-.16.088-.264.151-.312a.549.549 0 0 1 .32-.08h.638c.152 0 .256.025.32.08.063.048.12.16.151.312l1.261 5.348 1.381-5.348c.048-.16.104-.264.16-.312a.52.52 0 0 1 .311-.08h.743c.127 0 .2.065.2.2 0 .04-.009.08-.017.128a1.137 1.137 0 0 1-.056.2l-1.923 6.17c-.048.16-.104.263-.168.311a.51.51 0 0 1-.303.08h-.687c-.151 0-.255-.024-.32-.08-.063-.056-.119-.16-.15-.32l-1.238-5.148-1.23 5.14c-.04.16-.087.264-.15.32-.065.056-.177.08-.32.08zm10.256.215c-.415 0-.83-.048-1.229-.143-.399-.096-.71-.2-.918-.32-.128-.071-.215-.151-.247-.223a.563.563 0 0 1-.048-.224v-.407c0-.167.064-.247.183-.247.048 0 .096.008.144.024.048.016.12.048.2.08.271.12.566.215.878.279.319.064.63.096.95.096.502 0 .894-.088 1.165-.264a.86.86 0 0 0 .415-.758.777.777 0 0 0-.215-.559c-.144-.151-.415-.287-.806-.415l-1.157-.36c-.583-.183-1.014-.454-1.277-.813a1.902 1.902 0 0 1-.4-1.158c0-.335.073-.63.216-.886.144-.255.335-.479.575-.654.24-.184.51-.32.83-.415.32-.096.655-.136 1.006-.136.175 0 .359.008.535.032.183.024.35.056.518.088.16.04.312.08.455.127.144.048.256.096.336.144a.69.69 0 0 1 .24.2.43.43 0 0 1 .071.263v.375c0 .168-.064.256-.184.256a.83.83 0 0 1-.303-.096 3.652 3.652 0 0 0-1.532-.311c-.455 0-.815.071-1.062.223-.248.152-.375.383-.375.71 0 .224.08.416.24.567.16.152.454.304.87.44l1.134.358c.574.184.99.44 1.237.767.247.327.367.702.367 1.117 0 .343-.072.655-.207.926-.144.272-.336.511-.583.703-.248.2-.543.343-.886.447-.36.111-.734.167-1.142.167zM21.698 16.207c-2.626 1.94-6.442 2.969-9.722 2.969-4.598 0-8.74-1.7-11.87-4.526-.247-.223-.024-.527.27-.351 3.384 1.963 7.559 3.153 11.877 3.153 2.914 0 6.114-.607 9.06-1.852.439-.2.814.287.385.607zM22.792 14.961c-.336-.43-2.22-.207-3.074-.103-.255.032-.295-.192-.063-.36 1.5-1.053 3.967-.75 4.254-.399.287.36-.08 2.826-1.485 4.007-.215.184-.423.088-.327-.151.32-.79 1.03-2.57.695-2.994z"/>
-      </svg>
-    ),
-    color: '#FF9900',
-  },
-  {
-    name: 'Google Drive',
-    description: 'Connect your Google Drive via OAuth and sync specific folders or drives.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24">
-        <path fill="#0066DA" d="M7.71 2.37L2.5 11.3c-.46.8.12 1.8 1.04 1.8h10.42c.92 0 1.5-1 1.04-1.8L10.29 2.37a1.18 1.18 0 0 0-2.08 0z"/>
-        <path fill="#00AC47" d="M22.5 14.3L17.29 5.37a1.18 1.18 0 0 0-2.08 0l-2.6 4.5 4.18 7.23c.46.8 1.57.8 2.03 0l3.68-6.38c.46-.8-.12-1.42-1-1.42z"/>
-        <path fill="#EA4335" d="M12.5 9.87l-2.6-4.5a1.18 1.18 0 0 0-2.08 0L2.5 14.3c-.46.8.12 1.8 1.04 1.8h10.42c.92 0 1.5-1 1.04-1.8l-2.5-4.43z"/>
-        <path fill="#00832D" d="M19.71 20.63l2.6-4.5c.46-.8-.12-1.8-1.04-1.8h-5.21l4.18 7.23c.46.8 1.57.8 2.03 0l-2.56-4.93z"/>
-        <path fill="#2684FC" d="M11.21 14.33H4.96c-.92 0-1.5 1-1.04 1.8l2.6 4.5c.46.8 1.57.8 2.03 0l4.66-8.03v1.73z"/>
-        <path fill="#FFBA00" d="M14.79 14.33h-3.58l-2.6 4.5a1.18 1.18 0 0 0 2.08 0l4.1-4.5z"/>
-      </svg>
-    ),
-    color: '#0066DA',
-  },
-  {
-    name: 'Discord',
-    description: 'Link your Discord server to access and analyze chat data.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#5865F2">
-        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
-      </svg>
-    ),
-    color: '#5865F2',
-  },
-  {
-    name: 'Notion',
-    description: 'Sync pages and databases from Notion for knowledge retrieval.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#000000">
-        <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.98-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952l1.448.327s0 .84-1.168.84l-3.22.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.14c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z"/>
-      </svg>
-    ),
-    color: '#000000',
-  },
-  {
-    name: 'Jira',
-    description: 'Connect your Jira workspace to sync issues, comments, and attachments.',
-    icon: (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#0052CC">
-        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.005 1.005 0 0 0 23.013 0z"/>
-      </svg>
-    ),
-    color: '#0052CC',
+    fields: [
+      { key: 'base_url', label: 'Base URL' },
+      { key: 'email', label: 'Account Email' },
+      { key: 'api_token', label: 'API Token' },
+    ],
   },
 ];
 
 export default function DataSources() {
+  const { accessToken, isAuthenticated } = useAuth();
+  const [configs, setConfigs] = useState<Record<string, Record<string, string>>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+    setLoading(true);
+    api.listDataSources(accessToken)
+      .then((res) => {
+        const next: Record<string, Record<string, string>> = {};
+        res.connections.forEach((conn) => {
+          next[conn.provider] = conn.config || {};
+        });
+        setConfigs(next);
+      })
+      .catch(() => {
+        toast.error('Failed to load data source settings');
+      })
+      .finally(() => setLoading(false));
+  }, [accessToken, isAuthenticated]);
+
+  const statusFor = (providerId: string) => {
+    const cfg = configs[providerId];
+    if (!cfg) return 'Not configured';
+    const hasValue = Object.values(cfg).some((v) => v && v.trim() !== '');
+    return hasValue ? 'Configured' : 'Not configured';
+  };
+
+  const updateField = (providerId: string, key: string, value: string) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [providerId]: {
+        ...(prev[providerId] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const saveProvider = async (providerId: string) => {
+    if (!accessToken) return;
+    const config = configs[providerId] || {};
+    try {
+      await api.upsertDataSource(providerId, config, accessToken);
+      toast.success(`${providerId} configured`);
+    } catch {
+      toast.error(`Failed to save ${providerId} configuration`);
+    }
+  };
+
+  const clearProvider = async (providerId: string) => {
+    if (!accessToken) return;
+    try {
+      await api.deleteDataSource(providerId, accessToken);
+      setConfigs((prev) => ({ ...prev, [providerId]: {} }));
+      toast.success(`${providerId} cleared`);
+    } catch {
+      toast.error(`Failed to clear ${providerId}`);
+    }
+  };
+
+  const sourceCards = useMemo(() => dataSources, []);
+
   return (
     <div className="flex min-h-[calc(100vh-72px)]">
       <SettingsSidebar />
-      
+
       <motion.main
         variants={containerVariants}
         initial="hidden"
@@ -106,41 +164,63 @@ export default function DataSources() {
       >
         <motion.div variants={itemVariants} className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Data sources</h1>
-          <p className="text-muted-foreground">Manage your data source and connections</p>
+          <p className="text-muted-foreground">Configure and connect your data sources</p>
         </motion.div>
 
         <motion.div variants={itemVariants}>
           <h2 className="text-xl font-semibold text-white mb-4">Available sources</h2>
-          <p className="text-muted-foreground mb-6">Select a data source to add</p>
+          <p className="text-muted-foreground mb-6">
+            {loading ? 'Loading connections…' : 'Save credentials to enable future sync.'}
+          </p>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           variants={containerVariants}
           className="grid grid-cols-1 md:grid-cols-2 gap-4"
         >
-          {dataSources.map((source) => (
+          {sourceCards.map((source) => (
             <motion.div
-              key={source.name}
+              key={source.id}
               variants={itemVariants}
               whileHover={{ y: -4, borderColor: source.color }}
               transition={{ duration: 0.3 }}
             >
-              <Card
-                className="p-5 bg-card border-border hover:shadow-lg transition-all cursor-pointer group"
-                onClick={() => toast.info(`${source.name} integration coming soon`, {
-                  description: source.description,
-                })}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">{source.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-white mb-1 group-hover:text-primary transition-colors">
+              <Card className="p-5 bg-card border-border hover:shadow-lg transition-all">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">
                       {source.name}
                     </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {source.description}
                     </p>
                   </div>
+                  <div className="text-xs px-2 py-1 rounded-full bg-secondary/40 text-muted-foreground">
+                    {statusFor(source.id)}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {source.fields.map((field) => (
+                    <div key={field.key}>
+                      <label className="block text-xs text-muted-foreground mb-1">{field.label}</label>
+                      <Input
+                        type={field.key.includes('secret') || field.key.includes('token') ? 'password' : 'text'}
+                        value={configs[source.id]?.[field.key] || ''}
+                        onChange={(e) => updateField(source.id, field.key, e.target.value)}
+                        placeholder={field.label}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 mt-4">
+                  <Button size="sm" onClick={() => saveProvider(source.id)}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => clearProvider(source.id)}>
+                    Clear
+                  </Button>
                 </div>
               </Card>
             </motion.div>
