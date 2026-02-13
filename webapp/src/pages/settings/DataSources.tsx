@@ -92,6 +92,9 @@ const dataSources = [
 export default function DataSources() {
   const { accessToken, isAuthenticated } = useAuth();
   const [configs, setConfigs] = useState<Record<string, Record<string, string>>>({});
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
+  const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -100,10 +103,13 @@ export default function DataSources() {
     api.listDataSources(accessToken)
       .then((res) => {
         const next: Record<string, Record<string, string>> = {};
+        const nextStatuses: Record<string, string> = {};
         res.connections.forEach((conn) => {
           next[conn.provider] = conn.config || {};
+          nextStatuses[conn.provider] = conn.status || 'configured';
         });
         setConfigs(next);
+        setStatuses(nextStatuses);
       })
       .catch(() => {
         toast.error('Failed to load data source settings');
@@ -112,10 +118,13 @@ export default function DataSources() {
   }, [accessToken, isAuthenticated]);
 
   const statusFor = (providerId: string) => {
-    const cfg = configs[providerId];
-    if (!cfg) return 'Not configured';
-    const hasValue = Object.values(cfg).some((v) => v && v.trim() !== '');
-    return hasValue ? 'Configured' : 'Not configured';
+    const status = statuses[providerId];
+    if (status) {
+      if (status === 'connected') return 'Connected';
+      if (status === 'not_configured') return 'Not configured';
+      return 'Configured';
+    }
+    return 'Not configured';
   };
 
   const updateField = (providerId: string, key: string, value: string) => {
@@ -134,6 +143,7 @@ export default function DataSources() {
     try {
       await api.upsertDataSource(providerId, config, accessToken);
       toast.success(`${providerId} configured`);
+      setStatuses((prev) => ({ ...prev, [providerId]: 'configured' }));
     } catch {
       toast.error(`Failed to save ${providerId} configuration`);
     }
@@ -144,9 +154,36 @@ export default function DataSources() {
     try {
       await api.deleteDataSource(providerId, accessToken);
       setConfigs((prev) => ({ ...prev, [providerId]: {} }));
+      setStatuses((prev) => ({ ...prev, [providerId]: 'not_configured' }));
       toast.success(`${providerId} cleared`);
     } catch {
       toast.error(`Failed to clear ${providerId}`);
+    }
+  };
+
+  const connectGoogleDrive = async () => {
+    if (!accessToken) return;
+    try {
+      const res = await api.getGoogleDriveAuthUrl(accessToken);
+      window.location.href = res.url;
+    } catch {
+      toast.error('Failed to start Google Drive OAuth');
+    }
+  };
+
+  const fetchGoogleFolders = async () => {
+    if (!accessToken) return;
+    setFoldersLoading(true);
+    try {
+      const res = await api.getGoogleDriveFolders(accessToken);
+      setFolders(res.folders || []);
+      if (res.folders?.length === 0) {
+        toast.info('No folders found');
+      }
+    } catch {
+      toast.error('Failed to fetch Google Drive folders');
+    } finally {
+      setFoldersLoading(false);
     }
   };
 
@@ -221,7 +258,34 @@ export default function DataSources() {
                   <Button size="sm" variant="ghost" onClick={() => clearProvider(source.id)}>
                     Clear
                   </Button>
+                  {source.id === 'google_drive' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={connectGoogleDrive}
+                      disabled={statusFor(source.id) === 'Not configured'}
+                    >
+                      Connect
+                    </Button>
+                  )}
                 </div>
+
+                {source.id === 'google_drive' && statusFor(source.id) === 'Connected' && (
+                  <div className="mt-4">
+                    <Button size="sm" variant="outline" onClick={fetchGoogleFolders} disabled={foldersLoading}>
+                      {foldersLoading ? 'Fetching…' : 'Fetch folders'}
+                    </Button>
+                    {folders.length > 0 && (
+                      <div className="mt-3 max-h-40 overflow-y-auto border border-border rounded-md p-2">
+                        {folders.map((folder) => (
+                          <div key={folder.id} className="text-xs text-muted-foreground py-1">
+                            {folder.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
             </motion.div>
           ))}

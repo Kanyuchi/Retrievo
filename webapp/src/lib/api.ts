@@ -1118,6 +1118,22 @@ class ApiClient {
     });
   }
 
+  async getGoogleDriveAuthUrl(accessToken?: string): Promise<{ url: string }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/settings/data-sources/google_drive/auth-url', { headers });
+  }
+
+  async getGoogleDriveFolders(accessToken?: string): Promise<{ folders: { id: string; name: string }[] }> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/settings/data-sources/google_drive/folders', { headers });
+  }
+
   // Chat sessions (persisted chat history)
   async createChatSession(
     jobId: number,
