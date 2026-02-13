@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
@@ -18,6 +18,7 @@ export default function KnowledgeInsights() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
 
   const jobId = selectedKB && !selectedKB.isDefault ? Number(selectedKB.id) : null;
 
@@ -67,6 +68,21 @@ export default function KnowledgeInsights() {
 
   const missingCount = claims.filter(c => c.gaps.some(g => g.gap_type === 'missing_evidence')).length;
   const weakCount = claims.filter(c => c.gaps.some(g => g.gap_type === 'weak_coverage')).length;
+
+  const groupedClaims = useMemo(() => {
+    const groups: Record<string, { name: string; claims: KnowledgeClaimInfo[] }> = {};
+    claims.forEach((claim) => {
+      const clusterId = claim.cluster_id || 'unclustered';
+      const name = claim.cluster_name || (clusterId === 'unclustered' ? t('insights.clusters_title') : clusterId);
+      if (!groups[clusterId]) {
+        groups[clusterId] = { name, claims: [] };
+      }
+      groups[clusterId].claims.push(claim);
+    });
+    return Object.entries(groups)
+      .map(([id, group]) => ({ id, ...group }))
+      .sort((a, b) => b.claims.length - a.claims.length);
+  }, [claims, t]);
 
   if (authLoading || (!isAuthenticated && !authLoading)) {
     return (
@@ -162,6 +178,50 @@ export default function KnowledgeInsights() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {groupedClaims.length > 0 && (
+          <div className="bg-card border border-border rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{t('insights.clusters_title')}</h2>
+                <p className="text-xs text-muted-foreground">{t('insights.clusters_subtitle')}</p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {groupedClaims.length}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {groupedClaims.map((group) => {
+                const isExpanded = expandedClusters[group.id] || false;
+                const visibleClaims = isExpanded ? group.claims : group.claims.slice(0, 3);
+                return (
+                  <div key={group.id} className="border border-border rounded-md p-3 bg-secondary/30">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-foreground">
+                        {group.name} <span className="text-xs text-muted-foreground">({group.claims.length})</span>
+                      </div>
+                      {group.claims.length > 3 && (
+                        <button
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => setExpandedClusters(prev => ({ ...prev, [group.id]: !isExpanded }))}
+                        >
+                          {isExpanded ? t('insights.collapse', 'Collapse') : t('insights.expand', 'Expand')}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {visibleClaims.map((claim) => (
+                        <div key={claim.id} className="text-xs text-foreground/90">
+                          {claim.claim_text}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

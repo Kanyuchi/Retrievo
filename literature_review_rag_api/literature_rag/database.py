@@ -991,6 +991,14 @@ class KnowledgeEntityOccurrenceCRUD:
         return [row[0] for row in rows]
 
     @staticmethod
+    def list_entity_ids_for_doc(db: Session, job_id: int, doc_id: str, limit: int = 50) -> List[int]:
+        rows = db.query(KnowledgeEntityOccurrence.entity_id).filter(
+            KnowledgeEntityOccurrence.job_id == job_id,
+            KnowledgeEntityOccurrence.doc_id == doc_id
+        ).distinct().limit(limit).all()
+        return [row[0] for row in rows]
+
+    @staticmethod
     def delete_for_job(db: Session, job_id: int) -> None:
         db.query(KnowledgeEntityOccurrence).filter(
             KnowledgeEntityOccurrence.job_id == job_id

@@ -13,7 +13,8 @@ from ..auth import get_current_user
 from ..config import load_config
 from ..database import (
     get_db, JobCRUD, DocumentCRUD,
-    KnowledgeClaimCRUD, KnowledgeGapCRUD
+    KnowledgeClaimCRUD, KnowledgeGapCRUD,
+    KnowledgeEntityOccurrenceCRUD, KnowledgeEntityCRUD, KnowledgeClusterCRUD
 )
 from ..embeddings import get_embeddings
 from ..models import KnowledgeInsightsResponse, KnowledgeInsightsRunResponse
@@ -279,6 +280,28 @@ async def get_knowledge_insights(
             "evidence": evidence
         })
 
+    # Map doc_id -> cluster metadata
+    cluster_name_by_id = {c.cluster_id: c.name for c in KnowledgeClusterCRUD.list_for_job(db, job_id)}
+
+    doc_cluster_map: dict[str, tuple[Optional[str], Optional[str]]] = {}
+    for claim in claims:
+        if claim.doc_id in doc_cluster_map:
+            continue
+        entity_ids = KnowledgeEntityOccurrenceCRUD.list_entity_ids_for_doc(db, job_id, claim.doc_id)
+        if not entity_ids:
+            doc_cluster_map[claim.doc_id] = (None, None)
+            continue
+        entities = db.query(KnowledgeEntityCRUD.model).filter(
+            KnowledgeEntityCRUD.model.job_id == job_id,
+            KnowledgeEntityCRUD.model.id.in_(entity_ids)
+        ).all()
+        clusters = [e.cluster for e in entities if e.cluster]
+        if not clusters:
+            doc_cluster_map[claim.doc_id] = (None, None)
+            continue
+        cluster_id = max(set(clusters), key=clusters.count)
+        doc_cluster_map[claim.doc_id] = (cluster_id, cluster_name_by_id.get(cluster_id))
+
     return {
         "total_claims": len(claims),
         "claims": [
@@ -287,7 +310,9 @@ async def get_knowledge_insights(
                 "doc_id": c.doc_id,
                 "paragraph_index": c.paragraph_index,
                 "claim_text": c.claim_text,
-                "gaps": gaps_by_claim.get(c.id, [])
+                "gaps": gaps_by_claim.get(c.id, []),
+                "cluster_id": doc_cluster_map.get(c.doc_id, (None, None))[0],
+                "cluster_name": doc_cluster_map.get(c.doc_id, (None, None))[1]
             }
             for c in claims
         ]

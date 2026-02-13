@@ -380,6 +380,8 @@ class KnowledgeClaimInfo(BaseModel):
     paragraph_index: Optional[int]
     claim_text: str
     gaps: List[KnowledgeGapInfo] = Field(default_factory=list)
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
 
 
 class KnowledgeInsightsResponse(BaseModel):
