@@ -45,7 +45,6 @@ export default function MainNav() {
     { path: '/chats', label: t('nav.chat'), icon: MessageSquare },
     { path: '/searches', label: t('nav.search'), icon: Search },
     { path: '/agents', label: t('nav.agent'), icon: Bot },
-    { path: '/files', label: t('nav.files'), icon: FolderOpen },
     { path: '/jobs', label: t('nav.jobs'), icon: Briefcase },
   ];
 
@@ -191,6 +190,10 @@ export default function MainNav() {
                 <DropdownMenuItem onClick={() => navigate('/jobs')}>
                   <Briefcase className="mr-2 h-4 w-4" />
                   {t('common.knowledge_bases')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/files')}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  {t('nav.files')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/insights')}>
                   <Lightbulb className="mr-2 h-4 w-4" />
