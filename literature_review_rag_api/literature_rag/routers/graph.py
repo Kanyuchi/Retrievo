@@ -367,6 +367,7 @@ async def get_knowledge_graph(
 
     entities = KnowledgeEntityCRUD.list_for_job(db, job_id, limit=1000)
     edges = KnowledgeEdgeCRUD.list_for_job(db, job_id, limit=2000)
+    clusters = KnowledgeClusterCRUD.list_for_job(db, job_id)
 
     return {
         "nodes": [
