@@ -4,13 +4,21 @@
 
 ### Auto-Commit Policy
 **IMPORTANT:** After making any file changes (edits, additions, or deletions), Claude MUST:
-1. Stage the changed files with `git add <specific-files>`
-2. Commit with a descriptive message
-3. Push to origin/main
+1. **Smoke-test the change first** — run the script, hit the endpoint (expect 2xx with the right shape), exercise the UI flow, or confirm the failing test now passes. Auto-commit is gated on smoke test passing.
+2. Stage the changed files with `git add <specific-files>` (never `git add .` or `-A`)
+3. Commit with a descriptive message in `type: short description` form (feat / fix / docs / refactor / chore)
+4. Push to `origin/main` **only if** the smoke test verified the change works end-to-end. If the change can't be smoke-tested (infra-only, no runnable surface), commit but ask before pushing.
 
 **Commit Message Format:** Use regular commit messages without Co-Authored-By attribution.
 
-This ensures all changes are tracked in version control automatically without requiring explicit user requests.
+This ensures changes are tracked in version control automatically — gated on verification, not on explicit user requests.
+
+### Living Documentation
+After every meaningful code change (not at end of session — immediately):
+1. Append a dated entry to `session_log.md` (`## YYYY-MM-DD — summary` + bullet list of what/why)
+2. Update `whats_next.md`: move completed items to Done, re-prioritise Now
+3. Update `project_state.md` if a feature shipped, broke, or a decision was locked in
+4. Commit code + docs together in the same commit
 
 ### Iterative Problem Resolution
 **IMPORTANT:** When confronted with any bug, integration issue, or system problem:
