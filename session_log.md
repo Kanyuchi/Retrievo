@@ -22,3 +22,10 @@
 - Product context locked in: Humbowo is a Shona product targeting Africa + Germany clients (Shaun based in Germany, currently in Thailand); Frankfurt (eu-central-1) confirmed as DB region — co-location with the Hetzner server matters more than user geography
 - Created `.keys/README.md` documenting the credential drop-zone (hetzner_api_token, supabase_pat, db_url, SSH key); `.keys/` confirmed gitignored
 - Rewrote CLAUDE.md production section: dead Lightsail instructions replaced with Humbowo target architecture (Hetzner + Supabase Frankfurt + humbowo.com + TLS cutover scripts)
+
+## 2026-09-02 — Production database live: Supabase Frankfurt schema initialized
+- Supabase project "Humbowo" recreated in eu-central-1 (ref xhtuzovyiewmvlnmhjwh), verified ACTIVE_HEALTHY via Management API
+- Prepared gitignored production `.env` (JWT secret generated, domain/CORS/OAuth prefilled); repaired it after an editor stale-buffer save clobbered earlier values
+- DB password contains `@` — URL-encoded as `%40` in DATABASE_URL (Session pooler, port 5432)
+- Smoke-tested for real: connected to PostgreSQL 17.6 via the app's database.py and ran init_db — all 16 tables created in Supabase
+- Still needed in .env: HETZNER_API_TOKEN, GROQ_API_KEY, OPENAI_API_KEY
