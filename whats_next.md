@@ -3,10 +3,10 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), now to be served at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Shaun: settle overdue Hetzner invoice (products suspended; auto-reactivates ≤30 min after payment)
-2. Shaun: recreate Supabase project in an EU region (current "Humbowo" project is in Singapore; server will be Hetzner/EU) — then share the Session-pooler connection string
-3. Provision Hetzner server (CX22, Ubuntu 22.04), install Docker, deploy app with Supabase `DATABASE_URL`
-4. Object storage: create bucket (Cloudflare R2 or Hetzner Object Storage, S3-compatible) and set S3 env vars — may need small code tweak for custom S3 endpoint
+1. Shaun: recreate Supabase project "Humbowo" in **eu-central-1 (Frankfurt)** under TheNerdsInt; drop the Session-pooler string into `.keys/db_url` and a personal access token into `.keys/supabase_pat`
+2. Shaun: drop a Hetzner Cloud API token (Read & Write) into `.keys/hetzner_api_token`
+3. Claude: provision Hetzner server via API (CX22, Ubuntu 22.04, Falkenstein/Nuremberg), install Docker, deploy app with Supabase `DATABASE_URL`
+4. Object storage: create bucket (Cloudflare R2 or Hetzner Object Storage, S3-compatible) and set S3 env vars — check storage code for custom-endpoint support
 5. Point GoDaddy DNS A records (@ and www) for humbowo.com at the new Hetzner IP, then run TLS cutover (`scripts/deploy/cutover_host_nginx_tls.sh humbowo.com <email>`) and verify (`scripts/security/verify_tls_cutover.sh humbowo.com`)
 
 ## Soon

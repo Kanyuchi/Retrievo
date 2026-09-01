@@ -90,37 +90,28 @@ API runs on http://localhost:8001
 
 ---
 
-## Production Deployment
+## Production Deployment (Humbowo — rebuild in progress, 2026-09)
 
-### SSH Key Location
-**IMPORTANT:** The SSH key for production server is stored at:
-```
-.keys/lightsail.pem
-```
+The original deployment (AWS Lightsail 13.49.191.201, S3 `lit-rag-flow`, key `.keys/lightsail.pem`)
+is **dead** — it lived in a third-party AWS account that is no longer accessible. All old
+production data is written off. The product relaunches as **Humbowo** at **humbowo.com**.
 
-This key is gitignored and must NEVER be committed. Always use this key when deploying.
+### Target architecture
+- **Domain**: humbowo.com (GoDaddy registrar + GoDaddy DNS, Shaun's account)
+- **Server**: Hetzner Cloud (company: TheNerdsInt) — CX22, Ubuntu 22.04, Docker — *IP TBD at provisioning*
+- **Database**: Supabase managed Postgres, region **eu-central-1 (Frankfurt)** — app connects via
+  the Session pooler `DATABASE_URL` (psycopg2 + `pool_pre_ping` already wired in)
+- **Object storage**: S3-compatible bucket, provider TBD (Cloudflare R2 or Hetzner Object Storage)
+- **TLS**: host nginx via `literature_review_rag_api/scripts/deploy/cutover_host_nginx_tls.sh humbowo.com <email>`,
+  verified with `literature_review_rag_api/scripts/security/verify_tls_cutover.sh humbowo.com`
 
-### Production Server
-- **Host**: `13.49.191.201`
-- **User**: `ubuntu`
-- **Git Repo**: `~/literature_review_rag_api`
-- **Docker Context**: `~/literature_review_rag_api/literature_review_rag_api/`
+### Credentials (gitignored, see `.keys/README.md`)
+- `.keys/hetzner_api_token` — Hetzner Cloud API token (provisioning/management)
+- `.keys/supabase_pat` — Supabase personal access token (MCP / management API)
+- `.keys/db_url` — Supabase Session-pooler connection string for the app
+- `.keys/<ssh key>` — SSH key for the Hetzner server (created at provisioning)
 
-### Deploy Backend
-```bash
-ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd literature_review_rag_api && git pull origin main && cd literature_review_rag_api && sudo docker-compose up -d --build --force-recreate"
-```
-
-### Deploy Frontend
-```bash
-cd webapp && npm run build
-scp -i .keys/lightsail.pem -r dist/* ubuntu@13.49.191.201:~/lit_rag_webapp/
-```
-
-### View Logs
-```bash
-ssh -i .keys/lightsail.pem ubuntu@13.49.191.201 "cd literature_review_rag_api/literature_review_rag_api && sudo docker-compose logs -f --tail=100"
-```
+Once the server exists, update this section with the real IP, SSH user/key, and deploy commands.
 
 ---
 
