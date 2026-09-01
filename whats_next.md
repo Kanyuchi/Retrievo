@@ -1,33 +1,30 @@
 # What's Next
 
-**Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), now to be served at **humbowo.com** on infrastructure Shaun controls.
+**Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), live as **Humbowo** at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Shaun: paste into `literature_review_rag_api/.env` — `HETZNER_API_TOKEN` (Hetzner Humbowo project > Security > API tokens, Read & Write), `GROQ_API_KEY`, `OPENAI_API_KEY`
-2. ~~Supabase~~ DONE: project live in Frankfurt, schema (16 tables) initialized, token + DATABASE_URL verified working
-3. Claude: provision Hetzner server via API (CX22, Ubuntu 22.04, Falkenstein/Nuremberg), install Docker, deploy app with Supabase `DATABASE_URL`
-4. Object storage: create bucket (Cloudflare R2 or Hetzner Object Storage, S3-compatible) and set S3 env vars — check storage code for custom-endpoint support
-5. Point GoDaddy DNS A records (@ and www) for humbowo.com at the new Hetzner IP, then run TLS cutover (`scripts/deploy/cutover_host_nginx_tls.sh humbowo.com <email>`) and verify (`scripts/security/verify_tls_cutover.sh humbowo.com`)
+1. Shaun: paste `GROQ_API_KEY` and `OPENAI_API_KEY` into `literature_review_rag_api/.env` (clipboard routine) — chat + document indexing are dormant until then; Claude then ships them to the server and restarts the container
+2. Object storage for PDF uploads: create S3-compatible bucket (Cloudflare R2 free tier or Hetzner Object Storage), check storage code for custom-endpoint support, set AWS_* env vars
+3. Smoke-test the full user flow in the browser: register → create knowledge base → upload PDF → search → chat
+4. Set `REQUIRE_HTTPS=true` in server .env now that TLS is live (defense in depth)
 
 ## Soon
-- Update server `.env`: `CORS_ORIGINS`, `OAUTH_REDIRECT_BASE`, `OAUTH_REDIRECT_URL`, `AUTH_COOKIE_DOMAIN`, S3 + JWT secrets
-- Update `config/literature_config.yaml` CORS origins (replace old IP 13.49.191.201 with https://humbowo.com)
-- Update Google Cloud Console + GitHub OAuth redirect URIs to humbowo.com
-- Rebuild indices / re-upload seed corpus (old ChromaDB indices + S3 PDFs presumed lost)
-- Update project CLAUDE.md deploy section (server IP, key path) once new server exists
-- Store new SSH key at `.keys/` per dependency-management rule
+- Consider Claude Haiku 4.5 / Sonnet 5 for chat synthesis (best citation faithfulness; Groq free tier is the launch default)
+- Hetzner firewall via API (allow 22/80/443 only)
+- Server backups: Hetzner auto-backup (~20% of server cost) or snapshot cadence
+- Google/GitHub OAuth apps for humbowo.com (redirect URIs) if social login wanted
+- Update README.md branding (Retrievo → Humbowo) and REPLICATION_GUIDE.md
+- Uptime monitoring (e.g. UptimeRobot free) on https://humbowo.com/api/healthz
 
 ## Later
-- If moving to managed Postgres: write migration path from SQLite schema (SQLAlchemy models) + data seeding
-- Re-evaluate webapp-backup/ and litrag_webapp_pic/ directories for deletion
-- Revisit REPLICATION_GUIDE.md accuracy after the rebuild
+- Migrate webapp title/branding, favicon, i18n strings to Humbowo
+- Delete webapp-backup/ and litrag_webapp_pic/ directories
+- CI/CD: GitHub Action to deploy on push to main
 
 ## Blocked
-- Recovery of old production data (user DB, S3 PDFs `lit-rag-flow`, indices) — blocked on whether anyone can still access Nguks' AWS account
+- (nothing)
 
 ## Done
-- 2026-09-01: Backend made Postgres-ready (psycopg2 dep, pool_pre_ping, env-overridable DATABASE_URL) + CORS/.env.example prepped for humbowo.com — smoke-tested
-- 2026-09-01: Hosting decided (Hetzner) + database decided (Supabase managed Postgres); Supabase project created
-- 2026-09-01: State audit after gap; domain/host reference map for migration
-- 2026-09-01: humbowo.com registered (GoDaddy) and confirmed under our DNS control
-- 2026-09-01: Living docs created; unpushed commit pushed
+- 2026-09-02: **humbowo.com LIVE** — Hetzner cx23 provisioned via API, app deployed, DNS pointed, Let's Encrypt TLS, all security checks pass
+- 2026-09-02: Supabase Frankfurt DB live, schema initialized (16 tables), connection verified from app code
+- 2026-09-01: Backend made Postgres-ready; CORS/.env prepped; hosting + DB decided; living docs created; state audit after 3.5-month gap

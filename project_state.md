@@ -1,6 +1,6 @@
 # Retrievo — Project State
 
-_Last updated: 2026-09-01_
+_Last updated: 2026-09-02_
 
 ## What the project is
 Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, React/Vite webapp). Originally built as a literature-review RAG for German regional economic transitions research (13,578 chunks / 83 papers), later generalized into a product with user knowledge bases, chat sessions, EN/DE i18n, knowledge graph (GraphRAG), and knowledge insights.
@@ -11,7 +11,13 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 - CI: GitHub Actions workflow for backend smoke + frontend checks
 - Security hardening: HTTPS/HSTS handling, path-based rate limits, auth regression tests, host-nginx TLS cutover automation (`scripts/deploy/cutover_host_nginx_tls.sh`) + verification (`scripts/security/verify_tls_cutover.sh`)
 
-## What is broken / lost (discovered 2026-09-01)
+## Production (LIVE since 2026-09-02)
+- **https://humbowo.com** — Hetzner cx23 `humbowo-prod` 178.105.211.235 (Falkenstein), host nginx + Let's Encrypt (auto-renew), Docker container `lit-rag-api`
+- **DB**: Supabase Postgres 17.6, Frankfurt (ref xhtuzovyiewmvlnmhjwh), Session pooler, 16 tables initialized
+- **Pending**: GROQ/OPENAI keys (chat + indexing dormant), object storage bucket for uploads
+- Credentials: server `.env` (gitignored) + `.keys/` (SSH key `humbowo_ed25519`)
+
+## Old infrastructure (dead, discovered 2026-09-01)
 - **Production is DOWN.** Old Lightsail server 13.49.191.201 does not respond on 22/80/443.
 - **SSH key `.keys/lightsail.pem` is missing locally** — no access to the old server even if it exists.
 - Old AWS resources (Lightsail instance, S3 bucket `lit-rag-flow` in eu-north-1) were under a third-party account (Nguks') — presumed inaccessible. Production data (user DB SQLite, uploaded PDFs in S3, ChromaDB indices) presumed lost unless that account can be recovered.

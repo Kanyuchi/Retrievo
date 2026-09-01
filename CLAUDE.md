@@ -98,7 +98,12 @@ production data is written off. The product relaunches as **Humbowo** at **humbo
 
 ### Target architecture
 - **Domain**: humbowo.com (GoDaddy registrar + GoDaddy DNS, Shaun's account)
-- **Server**: Hetzner Cloud (company: TheNerdsInt) — CX22, Ubuntu 22.04, Docker — *IP TBD at provisioning*
+- **Server**: Hetzner Cloud `humbowo-prod` — cx23, Ubuntu 22.04, Falkenstein — **178.105.211.235**
+  - SSH: `ssh -i .keys/humbowo_ed25519 root@178.105.211.235`
+  - App: `/root/Retrievo/literature_review_rag_api` (docker compose service `api`, port 127.0.0.1:8001)
+  - Frontend webroot: `/var/www/humbowo` (build `webapp/dist` locally, scp there, chown www-data)
+  - Deploy backend: `ssh <server> "cd /root/Retrievo && git pull && cd literature_review_rag_api && docker compose up -d --build api"`
+  - nginx site: `/etc/nginx/sites-enabled/lit_rag_webapp` (host nginx, TLS via certbot, auto-renew active)
 - **Database**: Supabase managed Postgres, region **eu-central-1 (Frankfurt)** — app connects via
   the Session pooler `DATABASE_URL` (psycopg2 + `pool_pre_ping` already wired in)
 - **Object storage**: S3-compatible bucket, provider TBD (Cloudflare R2 or Hetzner Object Storage)

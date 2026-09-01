@@ -29,3 +29,12 @@
 - DB password contains `@` — URL-encoded as `%40` in DATABASE_URL (Session pooler, port 5432)
 - Smoke-tested for real: connected to PostgreSQL 17.6 via the app's database.py and ran init_db — all 16 tables created in Supabase
 - Still needed in .env: HETZNER_API_TOKEN, GROQ_API_KEY, OPENAI_API_KEY
+
+## 2026-09-02 — 🚀 humbowo.com LIVE: server provisioned, deployed, TLS verified
+- Grabbed Hetzner API token from clipboard; provisioned `humbowo-prod` (cx23 — CX22 line was retired — Falkenstein, Ubuntu 22.04, Docker via cloud-init, 2GB swap added) at **178.105.211.235**; fresh SSH key `.keys/humbowo_ed25519`
+- Shaun pointed GoDaddy A record @ → 178.105.211.235 (www CNAME already → apex); propagation confirmed on 8.8.8.8 and 1.1.1.1
+- Cloned repo on server, shipped .env, built API image (~9 min); container failed on committed dangling `data` symlink (→ ../lit_rag from old dev machine) — replaced with real dirs, removed from git, path now gitignored
+- Built webapp locally, deployed to `/var/www/humbowo` (nginx couldn't read /root)
+- Ran TLS cutover: Let's Encrypt cert (expires 2026-11-30, auto-renew), removed stock nginx default site (duplicate default_server conflict)
+- **verify_tls_cutover.sh humbowo.com: ALL PASS** — site 200, /api/healthz 200 over TLS, 301 redirect, HSTS/CSP/security headers
+- LLM API options compared (Groq/OpenAI/Anthropic/Mistral); decision: launch on Groq+OpenAI, consider Claude Haiku 4.5/Sonnet 5 for chat post-launch

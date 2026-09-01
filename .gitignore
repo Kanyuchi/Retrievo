@@ -62,3 +62,4 @@ Phase */
 
 # SSH keys (never commit)
 .keys/
+literature_review_rag_api/data
