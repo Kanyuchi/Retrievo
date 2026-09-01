@@ -37,4 +37,6 @@
 - Built webapp locally, deployed to `/var/www/humbowo` (nginx couldn't read /root)
 - Ran TLS cutover: Let's Encrypt cert (expires 2026-11-30, auto-renew), removed stock nginx default site (duplicate default_server conflict)
 - **verify_tls_cutover.sh humbowo.com: ALL PASS** — site 200, /api/healthz 200 over TLS, 301 redirect, HSTS/CSP/security headers
+- Rebranded webapp Retrievo → Humbowo (index.html title, Home/Login/Jobs pages), rebuilt, redeployed — verified live (<title>Humbowo</title>)
+- Shipped .env with OPENAI_API_KEY (indexing enabled) + restarted container; GROQ_API_KEY still pending — user pasted an xAI (`xai-...`) key, needs a real Groq key (`gsk_...`) from console.groq.com
 - LLM API options compared (Groq/OpenAI/Anthropic/Mistral); decision: launch on Groq+OpenAI, consider Claude Haiku 4.5/Sonnet 5 for chat post-launch

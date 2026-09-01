@@ -76,7 +76,7 @@ export default function Home() {
         {/* Hero Section */}
         <motion.section variants={itemVariants} className="mb-16">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
-            {t('home.welcome')} <span className="gradient-text">Retrievo</span>
+            {t('home.welcome')} <span className="gradient-text">Humbowo</span>
           </h1>
           <p className="mt-4 text-muted-foreground text-lg">
             {isAuthenticated
