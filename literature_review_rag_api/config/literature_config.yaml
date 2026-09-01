@@ -302,8 +302,8 @@ api:
     - "http://127.0.0.1:3000"
     - "http://localhost:5173"
     - "http://127.0.0.1:5173"
-    - "http://13.49.191.201"
-    - "https://13.49.191.201"
+    - "https://humbowo.com"
+    - "https://www.humbowo.com"
   cors_credentials: true
   cors_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   cors_headers: ["Authorization", "Content-Type", "X-API-Key", "X-CSRF-Token"]

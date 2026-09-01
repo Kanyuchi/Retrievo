@@ -7,3 +7,12 @@
 - Verified humbowo.com is registered (GoDaddy, 2026-09-01) with GoDaddy DNS — currently parked
 - **Discovered production is down**: old Lightsail server 13.49.191.201 unreachable on 22/80/443, and `.keys/lightsail.pem` missing locally; old AWS account (Nguks') presumed inaccessible → new hosting + new database required
 - Created living documentation files (project_state.md, session_log.md, whats_next.md)
+
+## 2026-09-01 (later) — Postgres/Supabase readiness + humbowo.com config prep
+- Shaun provisioned: Supabase project "Humbowo" (org TheNerdsInt, currently ap-southeast-1/Singapore — EU region recreation recommended) and has a Hetzner account (products currently suspended pending overdue payment)
+- Added `psycopg2-binary` to requirements.txt and requirements-prod.txt (backend had no Postgres driver)
+- Added `pool_pre_ping=True` to the SQLAlchemy engine (Supabase poolers drop idle connections)
+- docker-compose.yml: `DATABASE_URL` now env-overridable (was hardcoded to SQLite)
+- config/literature_config.yaml: CORS origins now humbowo.com/www.humbowo.com (replaced dead Lightsail IP)
+- .env.example: documented production values (Supabase pooler DATABASE_URL, humbowo.com CORS/OAuth/domain)
+- Smoke-tested: database.py init + User/Job CRUD against fresh SQLite with new engine args, psycopg2 imports, docker compose config validates

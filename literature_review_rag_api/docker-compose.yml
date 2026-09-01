@@ -9,8 +9,8 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     environment:
-      # Database
-      - DATABASE_URL=sqlite:///./data/db/literature_rag.db
+      # Database (override with managed Postgres, e.g. Supabase, in production .env)
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/db/literature_rag.db}
 
       # AWS S3 Configuration
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-lit-rag-flow}

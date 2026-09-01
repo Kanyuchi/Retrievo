@@ -3,11 +3,11 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), now to be served at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Decide + provision new hosting (old Lightsail under third-party AWS account is dead) — needs Shaun's input on provider/account
-2. Decide + provision the new database (SQLite-on-volume vs managed Postgres) — needs Shaun's input
-3. Create new S3 bucket (or equivalent object storage) under Shaun's account; set AWS creds in server `.env`
-4. Point GoDaddy DNS A record for humbowo.com (+ www) at the new server IP
-5. Run TLS cutover (`scripts/deploy/cutover_host_nginx_tls.sh humbowo.com <email>`) and verify (`scripts/security/verify_tls_cutover.sh humbowo.com`)
+1. Shaun: settle overdue Hetzner invoice (products suspended; auto-reactivates ≤30 min after payment)
+2. Shaun: recreate Supabase project in an EU region (current "Humbowo" project is in Singapore; server will be Hetzner/EU) — then share the Session-pooler connection string
+3. Provision Hetzner server (CX22, Ubuntu 22.04), install Docker, deploy app with Supabase `DATABASE_URL`
+4. Object storage: create bucket (Cloudflare R2 or Hetzner Object Storage, S3-compatible) and set S3 env vars — may need small code tweak for custom S3 endpoint
+5. Point GoDaddy DNS A records (@ and www) for humbowo.com at the new Hetzner IP, then run TLS cutover (`scripts/deploy/cutover_host_nginx_tls.sh humbowo.com <email>`) and verify (`scripts/security/verify_tls_cutover.sh humbowo.com`)
 
 ## Soon
 - Update server `.env`: `CORS_ORIGINS`, `OAUTH_REDIRECT_BASE`, `OAUTH_REDIRECT_URL`, `AUTH_COOKIE_DOMAIN`, S3 + JWT secrets
@@ -26,6 +26,8 @@
 - Recovery of old production data (user DB, S3 PDFs `lit-rag-flow`, indices) — blocked on whether anyone can still access Nguks' AWS account
 
 ## Done
+- 2026-09-01: Backend made Postgres-ready (psycopg2 dep, pool_pre_ping, env-overridable DATABASE_URL) + CORS/.env.example prepped for humbowo.com — smoke-tested
+- 2026-09-01: Hosting decided (Hetzner) + database decided (Supabase managed Postgres); Supabase project created
 - 2026-09-01: State audit after gap; domain/host reference map for migration
 - 2026-09-01: humbowo.com registered (GoDaddy) and confirmed under our DNS control
 - 2026-09-01: Living docs created; unpushed commit pushed
