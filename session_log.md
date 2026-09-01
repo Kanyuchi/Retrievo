@@ -40,3 +40,10 @@
 - Rebranded webapp Retrievo → Humbowo (index.html title, Home/Login/Jobs pages), rebuilt, redeployed — verified live (<title>Humbowo</title>)
 - Shipped .env with OPENAI_API_KEY (indexing enabled) + restarted container; GROQ_API_KEY still pending — user pasted an xAI (`xai-...`) key, needs a real Groq key (`gsk_...`) from console.groq.com
 - LLM API options compared (Groq/OpenAI/Anthropic/Mistral); decision: launch on Groq+OpenAI, consider Claude Haiku 4.5/Sonnet 5 for chat post-launch
+
+## 2026-09-02 — Research sprint + roadmap: architecture audit, RAG SOTA, market study
+- Deployed 3 parallel research agents: codebase architecture audit, 2026 RAG best-practices survey, market/monetization research (Germany + Africa)
+- Key audit findings: production per-job query path is dense-only (hybrid BM25 code exists but disconnected); storage.py lacks custom S3 endpoint support; quota/plan-tier scaffolding exists but unenforced; scaling bottlenecks mapped (embedded Chroma, pickle BM25, in-process tasks)
+- Key research findings: hybrid+rerank+eval-harness are table stakes; pgvector-on-Supabase is the right vector store at our scale; 73% of RAG failures are retrieval
+- Market: wedge = academia top-of-funnel → consulting/NGO teams on €25/seat Team tier; EU residency (already ours) is a sales asset; mobile money needed for Africa
+- Synthesized ROADMAP.md (5 phases, each with test gates) + published shareable artifact
