@@ -287,16 +287,10 @@ async def delete_current_user(
     """
     Delete the current user and all related data.
     """
-    # Hard delete all jobs (collections, BM25, storage, DB)
-    jobs = JobCRUD.get_user_jobs(db, current_user.id, include_archived=True)
-    for job in jobs:
-        _hard_delete_job_for_user(db, job)
-
-    # Revoke refresh tokens
-    RefreshTokenCRUD.revoke_all_for_user(db, current_user.id)
-
-    # Delete user
-    UserCRUD.delete(db, current_user)
+    # Complete GDPR-grade purge: owned jobs (vectors/storage/knowledge/chat/
+    # members/invites), traces in others' workspaces, tokens, then the user.
+    from ..deletion import purge_user
+    purge_user(db, current_user)
 
     clear_auth_cookies(response)
     return {"message": "Account deleted"}

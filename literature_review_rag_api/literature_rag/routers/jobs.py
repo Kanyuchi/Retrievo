@@ -717,16 +717,17 @@ async def update_job_term_maps(
 @router.delete("/{job_id}")
 async def delete_job(
     job_id: int,
-    hard_delete: bool = False,
+    hard_delete: bool = True,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Delete a job and all its documents.
+    Delete a knowledge base.
 
-    By default, this is a soft delete (job is marked as deleted but data is preserved).
-    Use ?hard_delete=true to permanently delete the job, its ChromaDB collection,
-    and all associated documents.
+    Default is a permanent purge (vectors, storage files, knowledge graph,
+    chat history, members, invites) — matching the UI's "permanently delete"
+    promise and GDPR deletion expectations. Pass ?hard_delete=false for a
+    recoverable soft delete (marks the job deleted, keeps data).
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -739,44 +740,10 @@ async def delete_job(
     require_job_role(db, job, current_user.id, "owner")
 
     if hard_delete:
-        # Hard delete: remove ChromaDB collection, BM25 index, storage files, and database records
         try:
-            # Delete ChromaDB collection
-            client = chromadb.PersistentClient(path=config.storage.indices_path)
-            try:
-                client.delete_collection(job.collection_name)
-                logger.info(f"Deleted ChromaDB collection: {job.collection_name}")
-            except Exception as e:
-                logger.warning(f"Could not delete collection {job.collection_name}: {e}")
-
-            # Delete BM25 index for this job
-            delete_job_bm25_index(job_id)
-
-            # Delete document relations for this job
-            DocumentRelationCRUD.delete_for_job(db, job_id)
-            KnowledgeGapCRUD.delete_for_job(db, job_id)
-            KnowledgeClaimCRUD.delete_for_job(db, job_id)
-            KnowledgeEdgeCRUD.delete_for_job(db, job_id)
-            KnowledgeEntityCRUD.delete_for_job(db, job_id)
-
-            # Delete all documents from storage
-            documents = DocumentCRUD.get_job_documents(db, job_id)
-            storage = get_storage_auto()
-            for doc in documents:
-                if doc.storage_key:
-                    try:
-                        storage.delete_pdf(doc.storage_key)
-                    except Exception as e:
-                        logger.warning(f"Could not delete file {doc.storage_key}: {e}")
-                db.delete(doc)
-
-            # Delete the job record
-            db.delete(job)
-            db.commit()
-
-            logger.info(f"Hard deleted job {job_id} with all data")
+            from ..deletion import purge_job
+            purge_job(db, job)
             return {"message": "Job permanently deleted", "hard_delete": True}
-
         except Exception as e:
             logger.error(f"Hard delete failed for job {job_id}: {e}")
             raise HTTPException(
