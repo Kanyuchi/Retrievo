@@ -117,3 +117,10 @@
 - Prod-verified GDPR flow: temp account with KB+doc+invite deleted itself via DELETE /api/auth/me → users/jobs/vector_chunks/invites all 0, MinIO object gone; orphaned pre-purge test object also removed (bucket now empty = matches reality)
 - 4 public legal/trust pages live (subagent-built): /legal/privacy, /legal/impressum, /legal/dpa, /trust + global footer links; honest AI-processing disclosure (OpenAI/xAI US, no-training terms; stored documents stay EU); amber {{PLACEHOLDER}} tokens await TheNerdsInt legal details (name, address, register, VAT, managing director)
 - 72 tests green
+
+## 2026-09-02 (late evening) — Phase 5 round 1: fusion bug fixed, truncation mystery solved, brand + bundle
+- Debug agent (instrumented repro with prompt-capturing fake LLM) proved content plumbing sound on all 3 pipeline paths, then found the REAL latent bug: _hybrid_fuse stamped raw dense distances, so _postprocess_results re-sorted by dense similarity and silently discarded the RRF hybrid ranking when trimming to n_sources — BM25-surfaced answer chunks could be dropped for generic dense-similar ones. Fixed: fused chunks carry RRF-rank-derived scores. 76 tests.
+- The observed "truncation" was a TEST ARTIFACT: hand-rolled single-line test PDFs overflow the 612pt page; the extractor correctly reads only on-page text (~113 chars). Proven by storing/inspecting the chunk (length 113) then uploading a line-wrapped PDF → chat answered "Approximately 12,000 jobs [1]" on production. Grounded citation behavior confirmed end to end.
+- Brand sweep: README + UI strings → Humbowo (agent was stopped mid-commit by user; I verified lint/build and committed the clean work — revertible if the stop meant discard)
+- Low-bandwidth: cytoscape code-split → main bundle 1.44MB→902KB (gzip 423→255KB, −40% first load); nav breakpoint fix
+- All prod-verified; test accounts self-deleted via the GDPR purge (eating our own dogfood)

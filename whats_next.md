@@ -3,7 +3,7 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), live as **Humbowo** at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Investigate chat context truncation (snippet clipped ~110 chars in generation context) — fold into golden-set eval work
+1. Phase 5 round 2: knowledge-graph visual polish; golden-set semantic eval (needs a real corpus uploaded — Shaun's thesis papers would be ideal seed data)
 2. Shaun: TheNerdsInt legal details (name, legal form, address, register court+number, VAT ID, managing director) → fill {{PLACEHOLDER}} tokens in legal pages
 3. Phase 3c (billing) when Stripe account exists; then Phase 5 differentiators (graph polish, low-bandwidth pass, chunking A/B with golden set)
 3. Phase 3c (billing): Stripe checkout/webhooks/portal + billing page — BLOCKED on Shaun creating the Stripe account (pricing locked: Free / €19 Pro / €25-seat Team, 3-seat min, academic discount); Paystack after
@@ -26,6 +26,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-02: Phase 5 round 1 — latent hybrid-ranking bug fixed (RRF preserved through trim); "truncation" root-caused as test-PDF artifact, grounded-citation chat verified with real figure; Humbowo brand sweep; −40% main bundle (cytoscape code-split)
 - 2026-09-02: Phase 4 — GDPR-grade purge (verified live), legal pages (privacy/Impressum/DPA/trust) with honest AI-processing disclosure
 - 2026-09-02: Chat LIVE via xAI Grok (provider factory); MinIO object storage live (uploads verifiably in bucket) — every core feature of the product now works in production
 - 2026-09-02: Phase 3b — team workspaces (roles viewer/editor/owner, invite links, member management) live and E2E-verified on prod
