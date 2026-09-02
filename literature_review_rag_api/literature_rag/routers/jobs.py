@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ..database import (
     get_db, User, Job, Document, JobCRUD, DocumentCRUD, DocumentRelationCRUD,
     KnowledgeClaimCRUD, KnowledgeGapCRUD, KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
-    JobStatus, DocumentStatus
+    JobStatus, DocumentStatus, JobMemberCRUD
 )
 from ..auth import get_current_user
 from ..models import (
@@ -31,6 +31,7 @@ from ..isolation import (
     get_tenant_context, TenantContext, verify_job_access,
     TenantScopedQuery
 )
+from ..membership import require_job_role
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +298,7 @@ def build_job_indexer(
     )
 
 
-def job_to_response(job: Job) -> JobResponse:
+def job_to_response(job: Job, role: Optional[str] = None) -> JobResponse:
     """Convert Job model to JobResponse."""
     term_maps_value = None
     if job.term_maps:
@@ -317,7 +318,8 @@ def job_to_response(job: Job) -> JobResponse:
         document_count=job.document_count,
         chunk_count=job.chunk_count,
         created_at=job.created_at.isoformat(),
-        updated_at=job.updated_at.isoformat()
+        updated_at=job.updated_at.isoformat(),
+        role=role
     )
 
 
@@ -387,13 +389,23 @@ async def list_jobs(
     db: Session = Depends(get_db)
 ):
     """
-    List all jobs for the current user.
+    List all jobs for the current user: owned + shared workspaces they are a member of.
     """
-    jobs = JobCRUD.get_user_jobs(db, current_user.id, include_archived)
+    owned_jobs = JobCRUD.get_user_jobs(db, current_user.id, include_archived)
+    responses = [job_to_response(job, role="owner") for job in owned_jobs]
+
+    member_rows = JobMemberCRUD.list_job_ids_for_user(db, current_user.id)
+    for member_job_id, member_role in member_rows:
+        job = JobCRUD.get_by_id(db, member_job_id)
+        if not job:
+            continue
+        if not include_archived and job.status != JobStatus.ACTIVE.value:
+            continue
+        responses.append(job_to_response(job, role=member_role))
 
     return JobListResponse(
-        total=len(jobs),
-        jobs=[job_to_response(job) for job in jobs]
+        total=len(responses),
+        jobs=responses
     )
 
 
@@ -453,11 +465,7 @@ async def update_job(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "owner")
 
     if name:
         job.name = name
@@ -487,11 +495,7 @@ async def update_job_term_maps(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "editor")
 
     import json
     job.term_maps = json.dumps(term_maps)
@@ -522,11 +526,7 @@ async def delete_job(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "owner")
 
     if hard_delete:
         # Hard delete: remove ChromaDB collection, BM25 index, storage files, and database records
@@ -600,11 +600,7 @@ async def clear_job_documents(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "editor")
 
     try:
         documents_deleted = 0
@@ -687,11 +683,7 @@ async def get_job_stats(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     # Get collection stats
     try:
@@ -747,11 +739,7 @@ async def list_job_documents(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     documents = DocumentCRUD.get_job_documents(db, job_id)
 
@@ -796,11 +784,7 @@ async def get_job_document_download_url(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)
     if not document:
@@ -839,11 +823,7 @@ async def get_related_documents(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)
     if not document:
@@ -911,11 +891,7 @@ async def query_job(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     try:
         # Get collection
@@ -1212,11 +1188,7 @@ async def chat_with_job(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "viewer")
 
     # Check for Groq API key
     groq_api_key = config.llm.groq_api_key or os.getenv("GROQ_API_KEY")
@@ -1357,11 +1329,7 @@ async def upload_to_job(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "editor")
 
     require_s3_storage()
 
@@ -1388,7 +1356,7 @@ async def upload_to_job(
         )
 
     from ..quotas import check_quota_for_upload
-    check_quota_for_upload(current_user.id, len(contents))
+    check_quota_for_upload(job.user_id, len(contents))
 
     # Save to temp file
     upload_id = str(uuid.uuid4())[:8]
@@ -1454,8 +1422,7 @@ async def upload_to_job_async(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "editor")
 
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
@@ -1472,7 +1439,7 @@ async def upload_to_job_async(
                             detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB")
 
     from ..quotas import check_quota_for_upload
-    check_quota_for_upload(current_user.id, len(contents))
+    check_quota_for_upload(job.user_id, len(contents))
 
     # Staging dir shared between api and worker containers (compose volume)
     staging = Path(os.getenv("UPLOADS_DIR", config.upload.temp_path))
@@ -1519,11 +1486,7 @@ async def delete_job_document(
             detail="Job not found"
         )
 
-    if job.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    require_job_role(db, job, current_user.id, "editor")
 
     # Get document from database
     document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)

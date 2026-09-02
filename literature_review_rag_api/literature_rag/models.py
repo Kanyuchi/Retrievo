@@ -549,6 +549,7 @@ class JobResponse(BaseModel):
     chunk_count: int
     created_at: str
     updated_at: str
+    role: Optional[str] = None
 
     class Config:
         from_attributes = True

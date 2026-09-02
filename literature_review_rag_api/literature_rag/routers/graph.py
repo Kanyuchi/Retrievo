@@ -15,6 +15,7 @@ from ..database import (
     KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
     KnowledgeEntityOccurrenceCRUD, KnowledgeClusterCRUD
 )
+from ..membership import require_job_role
 from ..models import KnowledgeGraphResponse, KnowledgeGraphRunResponse, KnowledgeGraphClusterResponse
 
 logger = logging.getLogger(__name__)
@@ -217,8 +218,7 @@ async def build_knowledge_graph(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "editor")
 
     claims = KnowledgeClaimCRUD.list_for_job(db, job_id, limit=claim_limit)
     KnowledgeEdgeCRUD.delete_for_job(db, job_id)
@@ -362,8 +362,7 @@ async def get_knowledge_graph(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "viewer")
 
     entities = KnowledgeEntityCRUD.list_for_job(db, job_id, limit=1000)
     edges = KnowledgeEdgeCRUD.list_for_job(db, job_id, limit=2000)
@@ -394,8 +393,7 @@ async def get_graph_clusters(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "viewer")
 
     clusters = KnowledgeClusterCRUD.list_for_job(db, job_id)
     return {

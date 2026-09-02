@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db, JobCRUD, ChatSessionCRUD, ChatMessageCRUD
+from ..membership import require_job_role
 from ..models import (
     ChatSessionCreateRequest,
     ChatSessionUpdateRequest,
@@ -29,8 +30,9 @@ async def create_chat_session(
     db: Session = Depends(get_db),
 ):
     job = JobCRUD.get_by_id(db, request.job_id)
-    if not job or job.user_id != current_user.id:
+    if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "viewer")
 
     session = ChatSessionCRUD.create(db, current_user.id, request.job_id, request.title)
     return session

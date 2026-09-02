@@ -17,6 +17,7 @@ from ..database import (
     KnowledgeEntityOccurrenceCRUD, KnowledgeEntityCRUD, KnowledgeClusterCRUD
 )
 from ..embeddings import get_embeddings
+from ..membership import require_job_role
 from ..models import KnowledgeInsightsResponse, KnowledgeInsightsRunResponse
 
 logger = logging.getLogger(__name__)
@@ -149,8 +150,7 @@ async def run_knowledge_insights(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "editor")
 
     documents = DocumentCRUD.get_job_documents(db, job_id)[:doc_limit]
     collection = _get_job_collection(job)
@@ -266,8 +266,7 @@ async def get_knowledge_insights(
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    require_job_role(db, job, current_user.id, "viewer")
 
     claims = KnowledgeClaimCRUD.list_for_job(db, job_id, limit=limit)
     gaps = KnowledgeGapCRUD.list_for_job(db, job_id)
