@@ -68,6 +68,7 @@ function useCytoscape(
           {
             selector: 'node',
             style: {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cytoscape style callbacks are untyped
               'background-color': (ele: any) => hashToColor(ele.data('cluster')),
               label: 'data(label)',
               color: '#e2e8f0',
@@ -100,6 +101,7 @@ function useCytoscape(
       randomize: true,
       nodeSeparation: 80,
       idealEdgeLength: 140,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fcose layout options lack typings
     } as any);
     layout.run();
 

@@ -19,5 +19,9 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // shadcn/ui files intentionally export variants/hooks beside components
+      'react-refresh/only-export-components': 'warn',
+    },
   },
 ])
