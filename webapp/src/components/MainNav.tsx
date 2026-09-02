@@ -240,7 +240,7 @@ export default function MainNav() {
 
           {/* Mobile Menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild className="lg:hidden">
+            <SheetTrigger asChild className="xl:hidden">
               <Button variant="ghost" size="icon">
                 <Menu className="w-6 h-6" />
               </Button>

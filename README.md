@@ -1,8 +1,8 @@
-# Retrievo
+# Humbowo
 
-**Repo note:** the repository name is legacy; the product name and domain are **Retrievo**.
+**Repo note:** the repository name (`retrievo`) is legacy; the product is **Humbowo** at **humbowo.com** (by TheNerdsInt).
 
-Retrievo is a production‑grade retrieval and knowledge platform for document‑heavy workflows — academic, business, and operational. It pairs a scalable RAG backend with a modern web app, supports multi‑tenant knowledge bases, and is designed to grow from thousands to millions of documents without changing the core architecture.
+Humbowo is a production‑grade retrieval and knowledge platform for document‑heavy workflows — academic, business, and operational. It pairs a scalable RAG backend with a modern web app, supports multi‑tenant knowledge bases, and is designed to grow from thousands to millions of documents without changing the core architecture.
 
 > **Want to deploy this for your own domain?** See the [Replication Guide](REPLICATION_GUIDE.md) for step‑by‑step instructions.
 
@@ -101,6 +101,6 @@ retrievo/
 │   │   └── literature_config.yaml
 │   ├── indices/               # ChromaDB storage
 │   └── venv/
-├── webapp/                     # Retrievo web UI (search/chat/upload)
+├── webapp/                     # Humbowo web UI (search/chat/upload)
 └── README.md
 ```

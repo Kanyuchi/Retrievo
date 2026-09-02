@@ -1,6 +1,8 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { AuthProvider } from './contexts/AuthContext';
 import { KnowledgeBaseProvider } from './contexts/KnowledgeBaseContext';
 import MainNav from './components/MainNav';
@@ -16,7 +18,6 @@ import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import JoinWorkspace from './pages/JoinWorkspace';
 import KnowledgeInsights from './pages/KnowledgeInsights';
-import KnowledgeGraph from './pages/KnowledgeGraph';
 import DataSources from './pages/settings/DataSources';
 import ModelProviders from './pages/settings/ModelProviders';
 import MCP from './pages/settings/MCP';
@@ -27,6 +28,18 @@ import Privacy from './pages/legal/Privacy';
 import Impressum from './pages/legal/Impressum';
 import Dpa from './pages/legal/Dpa';
 import Trust from './pages/Trust';
+
+// Lazily loaded: pulls in cytoscape (+ layout plugin), only needed on this page.
+const KnowledgeGraph = lazy(() => import('./pages/KnowledgeGraph'));
+
+// Minimal fallback shown while a lazy-loaded route chunk downloads
+function RouteLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 // Minimal footer shared across public pages (legal / trust links)
 function AppFooter() {
@@ -93,7 +106,14 @@ function App() {
               <Route path="/jobs/:jobId" element={<JobDetail />} />
               <Route path="/join/:token" element={<JoinWorkspace />} />
               <Route path="/insights" element={<KnowledgeInsights />} />
-              <Route path="/graph" element={<KnowledgeGraph />} />
+              <Route
+                path="/graph"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <KnowledgeGraph />
+                  </Suspense>
+                }
+              />
               <Route path="/settings/data-sources" element={<DataSources />} />
               <Route path="/settings/model-providers" element={<ModelProviders />} />
               <Route path="/settings/mcp" element={<MCP />} />
