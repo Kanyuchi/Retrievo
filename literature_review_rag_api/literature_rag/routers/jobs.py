@@ -1388,110 +1388,25 @@ async def upload_to_job(
 
         logger.info(f"Processing upload for job {job_id}: {file.filename}")
 
-        # Get phase name from config
-        phases_config = config.data.phases if hasattr(config.data, 'phases') else []
-        phase_names = {p.get('name', ''): p.get('full_name', '') for p in phases_config}
-        phase_name = phase_names.get(phase, phase)
+        # Same code path the queue worker runs (job_tasks.process_job_upload),
+        # executed inline to preserve this route's synchronous contract.
+        from ..database import UploadTaskCRUD
+        from ..job_tasks import process_job_upload
 
-        # Get job collection + indexer (with BM25 for hybrid search)
-        # Use job's extractor_type for document extraction (academic, business, generic, auto)
-        client, collection = get_job_collection(job)
-        extractor_type = getattr(job, 'extractor_type', 'auto') or 'auto'
-        indexer = build_job_indexer(client, collection, job.id, extractor_type=extractor_type)
-
-        # Index PDF using shared pipeline (section-aware, normalization, etc.)
-        result = indexer.index_pdf(
-            pdf_path=temp_file,
-            phase=phase,
-            phase_name=phase_name,
-            topic_category=topic
+        UploadTaskCRUD.create(
+            db, task_id=upload_id, filename=safe_filename, phase=phase,
+            topic=topic, status="queued", temp_file_path=str(temp_file)
         )
-
-        if not result["success"]:
-            if temp_file.exists():
-                temp_file.unlink()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.get("error", "Failed to index document")
-            )
-
-        # Upload to storage (S3 if configured, otherwise local)
-        storage = get_storage_auto()
-        try:
-            with open(temp_file, "rb") as f:
-                storage_key = storage.upload_pdf(
-                    job_id=job_id,
-                    phase=phase,
-                    topic=topic,
-                    filename=safe_filename,
-                    file_content=f
-                )
-        except Exception as e:
-            # Roll back chunks if storage fails
-            if result.get("doc_id"):
-                existing = collection.get(where={"doc_id": result["doc_id"]}, include=[])
-                if existing and existing.get("ids"):
-                    collection.delete(ids=existing["ids"])
-            if temp_file.exists():
-                temp_file.unlink()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Storage upload failed: {e}"
-            )
-
-        if temp_file.exists():
-            temp_file.unlink()
-
-        # Create document record in database
-        authors_value = None
-        if result.get("metadata"):
-            authors_value = result["metadata"].get("authors")
-            if isinstance(authors_value, list):
-                authors_value = ", ".join(authors_value)
-
-        document = DocumentCRUD.create(
-            db=db,
-            job_id=job_id,
-            doc_id=result["doc_id"],
-            filename=f"{upload_id}_{safe_filename}",
-            original_filename=file.filename,
-            title=result["metadata"].get("title") if result.get("metadata") else None,
-            authors=authors_value,
-            year=result["metadata"].get("year") if result.get("metadata") else None,
-            phase=phase,
-            topic_category=topic,
-            doi=result["metadata"].get("doi") if result.get("metadata") else None,
-            file_size=len(contents),
-            storage_key=storage_key,
-            total_pages=result["metadata"].get("total_pages") if result.get("metadata") else None
+        result = process_job_upload(
+            upload_id, job_id, str(temp_file), phase, topic, file.filename
         )
-
-        # Update document status
-        DocumentCRUD.update_status(
-            db, document,
-            status=DocumentStatus.INDEXED.value,
-            chunk_count=result["chunks_indexed"]
-        )
-
-        # Update job stats
-        job.document_count += 1
-        job.chunk_count += result["chunks_indexed"]
-        db.commit()
-
-        logger.info(f"Successfully indexed {result['chunks_indexed']} chunks for job {job_id}")
-
-        try:
-            compute_document_relations(db, job, collection, result["doc_id"])
-        except Exception as e:
-            logger.warning(f"Failed to compute document relations for {result['doc_id']}: {e}")
-
-        return {
-            "success": True,
-            "doc_id": result["doc_id"],
-            "filename": file.filename,
-            "chunks_indexed": result["chunks_indexed"],
-            "metadata": result.get("metadata")
-        }
+        if not result.get("success"):
+            error = result.get("error", "Failed to index document")
+            code = (status.HTTP_500_INTERNAL_SERVER_ERROR
+                    if error.startswith("Storage upload failed")
+                    else status.HTTP_400_BAD_REQUEST)
+            raise HTTPException(status_code=code, detail=error)
+        return result
 
     except HTTPException:
         raise
