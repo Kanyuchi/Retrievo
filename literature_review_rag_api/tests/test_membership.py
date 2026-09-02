@@ -8,8 +8,10 @@ def setup():
     from literature_rag.database import init_db, get_db_session, UserCRUD, JobCRUD
     init_db()
     db = get_db_session()
-    owner = UserCRUD.create(db, email=f"own-{id(db)}@t.local", password_hash="x")
-    other = UserCRUD.create(db, email=f"oth-{id(db)}@t.local", password_hash="x")
+    import uuid
+    uid = uuid.uuid4().hex[:10]
+    owner = UserCRUD.create(db, email=f"own-{uid}@t.local", password_hash="x")
+    other = UserCRUD.create(db, email=f"oth-{uid}@t.local", password_hash="x")
     job = JobCRUD.create(db, user_id=owner.id, name="m-kb")
     return db, owner, other, job
 
