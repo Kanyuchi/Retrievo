@@ -32,7 +32,8 @@ class JobCollectionRAG:
         collection: chromadb.Collection,
         embedding_model: str = None,
         term_maps: Optional[Dict[str, List[List[str]]]] = None,
-        job_id: Optional[int] = None
+        job_id: Optional[int] = None,
+        bm25_retriever: Optional[Any] = None,
     ):
         """
         Initialize the job collection RAG.
@@ -47,6 +48,18 @@ class JobCollectionRAG:
         self.job_id = job_id
         self.term_maps = term_maps or {}
         self.normalization_enabled = bool(term_maps)
+
+        # Hybrid BM25+dense fusion (retriever injected by the router; BM25
+        # index maintenance stays owned by routers/jobs.py)
+        self.bm25_retriever = bm25_retriever
+        _r = self.config.retrieval
+        self._hybrid_config = {
+            "enabled": bool(getattr(_r, "use_hybrid", False)),
+            "bm25_candidates": int(getattr(_r, "bm25_candidates", 50)),
+            "method": getattr(_r, "hybrid_method", "rrf"),
+            "dense_weight": float(getattr(_r, "hybrid_weight", 0.7)),
+            "rrf_k": int(getattr(_r, "rrf_k", 60)),
+        }
 
         # Initialize embeddings using unified interface
         self.embeddings = get_embeddings(self.config.embedding)
@@ -168,6 +181,72 @@ class JobCollectionRAG:
         """Check if the collection is ready."""
         return self.collection is not None and self.collection.count() > 0
 
+    def _hybrid_fuse(self, expanded_query: str, dense_results: dict,
+                     candidate_k: int, where_filter) -> dict:
+        """Fuse dense Chroma results with BM25 results via RRF; return a
+        Chroma-query-shaped dict. Falls back to dense_results on any issue.
+        BM25 ignores the Chroma where filter, so fused results are
+        post-filtered against the equality conditions."""
+        try:
+            if not (self._hybrid_config["enabled"] and self.bm25_retriever
+                    and self.bm25_retriever.is_ready()):
+                return dense_results
+
+            from .bm25_retriever import HybridScorer
+
+            dense_ids = (dense_results.get("ids") or [[]])[0]
+            dense_dist = (dense_results.get("distances") or [[]])[0]
+            dense_pairs = list(zip(dense_ids, dense_dist))
+            bm25_pairs = self.bm25_retriever.query(
+                expanded_query, n_results=self._hybrid_config["bm25_candidates"])
+            if not bm25_pairs:
+                return dense_results
+
+            scorer = HybridScorer(
+                method=self._hybrid_config["method"],
+                dense_weight=self._hybrid_config["dense_weight"],
+                rrf_k=self._hybrid_config["rrf_k"])
+            fused = scorer.combine_scores(bm25_pairs, dense_pairs, candidate_k)
+            fused_ids = [cid for cid, _ in fused]
+            if not fused_ids:
+                return dense_results
+
+            fetched = self.collection.get(ids=fused_ids, include=["documents", "metadatas"])
+            by_id = {i: (d, m) for i, d, m in zip(
+                fetched.get("ids", []), fetched.get("documents", []),
+                fetched.get("metadatas", []))}
+            dense_dist_map = dict(dense_pairs)
+
+            conditions = []
+            if where_filter:
+                conditions = where_filter.get("$and", [where_filter])
+
+            def _passes(meta):
+                for cond in conditions:
+                    for key, val in cond.items():
+                        if meta.get(key) != val:
+                            return False
+                return True
+
+            ids, docs, metas, dists = [], [], [], []
+            for cid in fused_ids:
+                if cid not in by_id:
+                    continue
+                doc, meta = by_id[cid]
+                if not _passes(meta or {}):
+                    continue
+                ids.append(cid)
+                docs.append(doc)
+                metas.append(meta)
+                dists.append(dense_dist_map.get(cid, 1.0))
+            if not ids:
+                return dense_results
+            return {"ids": [ids], "documents": [docs],
+                    "metadatas": [metas], "distances": [dists]}
+        except Exception as e:  # never let fusion break retrieval
+            logger.warning(f"Hybrid fusion skipped due to error: {e}")
+            return dense_results
+
     def query(
         self,
         question: str,
@@ -220,6 +299,8 @@ class JobCollectionRAG:
             where=where_filter,
             include=["documents", "metadatas", "distances"]
         )
+
+        results = self._hybrid_fuse(expanded_query, results, candidate_k, where_filter)
 
         if (
             language_filter_applied
