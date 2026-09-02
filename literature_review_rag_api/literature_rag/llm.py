@@ -26,6 +26,23 @@ def resolve_chat_model(api_key: str, configured_model: str) -> str:
     return configured_model
 
 
+def align_agent_models(agents_config, api_key: str, model: str) -> dict:
+    """Force every agentic-pipeline agent onto the provider's model.
+
+    The agents' per-role configs default to Groq's llama model; with an xAI
+    key those ids don't exist. Returns a new dict covering all four roles.
+    """
+    agents_config = dict(agents_config or {})
+    if not is_xai_key(api_key):
+        return agents_config
+    out = {}
+    for role in ("planning", "evaluation", "validation", "generation"):
+        entry = dict(agents_config.get(role) or {})
+        entry["model"] = model
+        out[role] = entry
+    return out
+
+
 def get_chat_client(api_key: str):
     """OpenAI-compatible chat client for the given key's provider."""
     if is_xai_key(api_key):

@@ -1450,9 +1450,11 @@ async def chat_with_job(
         )
 
         # Initialize chat LLM client (Groq or xAI, by key prefix)
-        from ..llm import get_chat_client, resolve_chat_model
+        from ..llm import align_agent_models, get_chat_client, resolve_chat_model
         groq_client = get_chat_client(groq_api_key)
         config.llm.model = resolve_chat_model(groq_api_key, config.llm.model)
+        config.agentic.agents = align_agent_models(
+            config.agentic.agents, groq_api_key, config.llm.model)
 
         # Build agentic config
         agentic_config = {

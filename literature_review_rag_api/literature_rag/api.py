@@ -141,11 +141,13 @@ async def lifespan(app: FastAPI):
         # Initialize Groq client if API key is available
         if config.llm.groq_api_key:
             try:
-                from .llm import get_chat_client, resolve_chat_model
+                from .llm import align_agent_models, get_chat_client, resolve_chat_model
                 groq_client = get_chat_client(config.llm.groq_api_key)
                 # Keep every downstream config.llm.model reader consistent
                 # with the actual provider (xAI keys need a Grok model id).
                 config.llm.model = resolve_chat_model(config.llm.groq_api_key, config.llm.model)
+                config.agentic.agents = align_agent_models(
+                    config.agentic.agents, config.llm.groq_api_key, config.llm.model)
                 logger.info(f"Chat LLM initialized with model: {config.llm.model}")
 
                 # Initialize agentic pipeline if enabled
