@@ -1,0 +1,27 @@
+# Golden queries for the Humbowo demo corpus (scripts/make_demo_corpus.py).
+# expected_files entries are substrings of original_filename.
+queries:
+  - id: ruhr_last_mine
+    query: "When did the last hard-coal mine in the Ruhr close?"
+    expected_files: ["ruhr_coal_transition"]
+  - id: lusatia_funds
+    query: "How much federal structural funding does Lusatia receive for the lignite phase-out?"
+    expected_files: ["lusatia_lignite_future"]
+  - id: voc_training
+    query: "role of dual vocational training in cushioning industrial decline"
+    expected_files: ["varieties_of_capitalism_institutions"]
+  - id: hydrogen_target
+    query: "electrolyzer capacity target North Rhine-Westphalia 2030"
+    expected_files: ["green_hydrogen_policy_nrw"]
+  - id: jtf_size
+    query: "size and purpose of the EU Just Transition Fund"
+    expected_files: ["just_transition_fund_eu"]
+  - id: reemployment_rate
+    query: "share of displaced industrial workers re-employed within two years"
+    expected_files: ["labor_market_structural_change"]
+  - id: codetermination_closures
+    query: "works councils negotiated closure plans early retirement"
+    expected_files: ["varieties_of_capitalism_institutions", "labor_market_structural_change"]
+  - id: ruhr_vs_lusatia
+    query: "comparison of Ruhr and Lusatia transition risks universities"
+    expected_files: ["lusatia_lignite_future"]

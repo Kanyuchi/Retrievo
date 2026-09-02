@@ -33,6 +33,9 @@ def _extract_json(content: str) -> list:
     if "```" in content:
         cleaned = content.split("```", 1)[-1]
         cleaned = cleaned.split("```", 1)[0].strip()
+        # Fenced blocks often carry a language tag: ```json\n{...}
+        if cleaned[:4].lower() == "json":
+            cleaned = cleaned[4:].strip()
         try:
             return json.loads(cleaned)
         except Exception:

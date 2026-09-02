@@ -29,3 +29,12 @@ def test_align_agent_models_groq_untouched():
     from literature_rag.llm import align_agent_models
     src = {"generation": {"model": "llama-3.3-70b-versatile"}}
     assert align_agent_models(src, "gsk_abc", "llama-3.3-70b-versatile") == src
+
+
+def test_extract_json_handles_fenced_language_tag():
+    from literature_rag.routers.graph import _extract_json
+    fenced = '```json\n{"entities": [{"name": "x", "type": "concept"}], "relations": []}\n```'
+    out = _extract_json(fenced)
+    assert isinstance(out, dict) and out["entities"][0]["name"] == "x"
+    assert _extract_json('{"a": 1}') == {"a": 1}
+    assert _extract_json("no json here") == []
