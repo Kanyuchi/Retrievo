@@ -32,6 +32,9 @@ class S3Storage:
         """
         self.bucket_name = bucket_name or os.getenv('AWS_S3_BUCKET', 'lit-rag-flow')
         self.region = region or os.getenv('AWS_REGION', 'eu-north-1')
+        # Optional custom endpoint for S3-compatible providers (Cloudflare R2,
+        # Hetzner Object Storage, MinIO). Empty/unset keeps AWS S3 behavior.
+        self.endpoint_url = os.getenv('S3_ENDPOINT_URL') or None
 
         # Initialize S3 client
         self.s3_client = boto3.client(
@@ -39,9 +42,10 @@ class S3Storage:
             region_name=self.region,
             aws_access_key_id=access_key_id or os.getenv('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=secret_access_key or os.getenv('AWS_SECRET_ACCESS_KEY'),
+            endpoint_url=self.endpoint_url,
         )
 
-        logger.info(f"S3 Storage initialized: bucket={self.bucket_name}, region={self.region}")
+        logger.info(f"S3 Storage initialized: bucket={self.bucket_name}, region={self.region}, endpoint={self.endpoint_url or 'aws'}")
 
     def _get_owner_prefix(self, owner_id: Union[int, str, None]) -> str:
         """Get S3 key prefix for a job or default collection."""
