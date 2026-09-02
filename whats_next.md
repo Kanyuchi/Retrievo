@@ -25,6 +25,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-02: Phase 3a — plan-tier quotas enforced (KB/upload/API-call) and verified on prod
 - 2026-09-02: Phase 2b — rq ingestion queue + worker container, Redis rate-limit/OAuth state, 2 uvicorn workers, async job uploads (frontend polling); CI repaired and verified green
 - 2026-09-02: Phase 2a — vectors + FTS live on Supabase pgvector behind VECTOR_BACKEND switch; CI parity gate with pgvector service container
 - 2026-09-02: Local py3.12 test env + conftest isolation; prod DB purged of test users; Phase 1 (hybrid chat retrieval + CI gate) deployed

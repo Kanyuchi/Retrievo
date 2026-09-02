@@ -88,3 +88,9 @@
 - CI honesty fix: backend job had been failing since the conftest commit (bare pytest lacks cwd on sys.path → python -m pytest) and frontend lint had 7 real errors (i18n escapes, shadcn export pattern, cytoscape anys) — all fixed, both jobs verified green on the exact run
 - Deploy fought SSH instability: hung compose killed (pkill self-match lesson), relaunched via systemd-run
 - E2E verified on prod: async upload → rq worker container processed it (worker logs confirm) → status completed → query returns chunk; 47 tests green; test user purged
+
+## 2026-09-02 (late) — Phase 3a: quota enforcement live
+- Wired the dormant QuotaService into create_job (403 at tier KB limit), both upload routes (403 over tier file-size/doc/storage limits), query_job + chat (429 at daily API-call limit, counter incremented)
+- 4 new tests (KB limit, enterprise bypass, file-size rejection, daily-call exhaustion) — 49 total green
+- Deploy lesson: systemd-run needs --working-directory (compose found no config from /); verified fix by grepping the quota symbol inside the running container before re-testing
+- Prod verified: 4th KB create for a free user → 403 "Knowledge base limit reached (3). Upgrade plan for more."; worker container healthcheck shows unhealthy (inherited curl check — cosmetic, fix queued)
