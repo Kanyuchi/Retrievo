@@ -1050,7 +1050,7 @@ class ApiClient {
       headers.Authorization = `Bearer ${accessToken}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/upload`, {
+    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/upload/async`, {
       method: 'POST',
       headers,
       body: formData,
@@ -1062,7 +1062,30 @@ class ApiClient {
       throw new Error(error.detail || error.error || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    const { task_id: taskId } = await response.json();
+
+    // Poll the DB-backed status endpoint until the queue worker finishes.
+    // Preserves this method's original contract: resolves with the final
+    // upload result, throws on failure.
+    const started = Date.now();
+    const timeoutMs = 10 * 60 * 1000;
+    while (Date.now() - started < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const statusRes = await fetch(`${this.baseUrl}/api/upload/${taskId}/status`, {
+        headers,
+        credentials: 'include',
+      });
+      if (!statusRes.ok) continue; // transient — keep polling
+      const task = await statusRes.json();
+      if (task.status === 'completed') {
+        const result = task.result ?? (task.result_json ? JSON.parse(task.result_json) : null);
+        return (result ?? { success: true }) as JobUploadResponse;
+      }
+      if (task.status === 'failed') {
+        throw new Error(task.error || 'Upload processing failed');
+      }
+    }
+    throw new Error('Upload timed out — check the knowledge base shortly; processing may still finish.');
   }
 
   // Delete document from a job
