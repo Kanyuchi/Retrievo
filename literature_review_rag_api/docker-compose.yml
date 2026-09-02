@@ -14,6 +14,9 @@ services:
       # Vector backend: chroma (embedded, default) or pgvector (Supabase Postgres)
       - VECTOR_BACKEND=${VECTOR_BACKEND:-chroma}
 
+      # Redis (queue, rate limiting, OAuth state)
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+
       # AWS S3 Configuration
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-lit-rag-flow}
       - AWS_REGION=${AWS_REGION:-eu-north-1}
@@ -94,5 +97,41 @@ services:
     profiles:
       - production
 
+  redis:
+    image: redis:7-alpine
+    container_name: lit-rag-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lit-rag-worker
+    command: rq worker --url redis://redis:6379/0 literature_rag
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/db/literature_rag.db}
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-chroma}
+      - REDIS_URL=redis://redis:6379/0
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-lit-rag-flow}
+      - AWS_REGION=${AWS_REGION:-eu-north-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    volumes:
+      - ${LITRAG_DATA_DIR:-./data}:/app/data
+      - ${LITRAG_INDICES_DIR:-./indices}:/app/indices
+      - ${LITRAG_UPLOADS_DIR:-./uploads}:/app/uploads
+      - ./config:/app/config:ro
+    depends_on:
+      - redis
+    restart: unless-stopped
+
 volumes:
   data:
+  redis_data:
