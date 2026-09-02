@@ -11,6 +11,8 @@ services:
     environment:
       # Database (override with managed Postgres, e.g. Supabase, in production .env)
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/db/literature_rag.db}
+      # Vector backend: chroma (embedded, default) or pgvector (Supabase Postgres)
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-chroma}
 
       # AWS S3 Configuration
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-lit-rag-flow}
