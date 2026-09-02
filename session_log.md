@@ -104,3 +104,10 @@
 - Deploy blocked twice by server↔GitHub 'expected flush after ref listing' — fixed durably with git config http.version HTTP/1.1 on the server
 - Prod E2E (3 users): editor join+query+upload 200; viewer upload 403; shared KB listed with role; members endpoint correct — then all test data purged (only Shaun's account remains)
 - 66 tests green ×3 runs
+
+## 2026-09-02 (final) — Chat live via xAI Grok + MinIO object storage
+- Shaun's "Groq" key is an xAI (Grok) key — instead of key-shopping, built literature_rag/llm.py provider factory: xai- keys → OpenAI client on api.x.ai, model grok-4.20-non-reasoning (LLM_MODEL overridable); gsk_ keys → Groq unchanged; agentic pipeline per-agent models aligned to provider (first prod chat 400'd on llama model id — fixed with align_agent_models covering all 4 roles)
+- MinIO S3-compatible object storage as compose service (bucket humbowo-documents, creds in .env, covered by Hetzner server backups); S3_ENDPOINT_URL path from Phase 0 used as designed
+- Prod verified: chat answers with citations via grok-4.20-non-reasoning; uploaded PDF listed in MinIO bucket; 70 tests green
+- Quality observation for Phase 1 follow-up: generation context showed a truncated snippet (~110 chars, looks like title-length truncation) — the model correctly refused to invent facts; investigate context assembly with the golden-set eval
+- Test user purged; DB holds only Shaun's account

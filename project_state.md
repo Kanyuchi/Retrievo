@@ -16,7 +16,8 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 - **DB**: Supabase Postgres 17.6, Frankfurt (ref xhtuzovyiewmvlnmhjwh), Session pooler, 16 app tables + vector_chunks (pgvector + FTS)
 - **Queue**: Redis (AOF) + rq worker container processes uploads; API runs 2 uvicorn workers; rate-limit + OAuth state Redis-backed (2026-09-02)
 - **Vectors/lexical**: VECTOR_BACKEND=pgvector in prod (2026-09-02); Chroma+BM25 pickles remain only as rollback (VECTOR_BACKEND=chroma)
-- **Pending**: GROQ/OPENAI keys (chat + indexing dormant), object storage bucket for uploads
+- **LLM**: chat via xAI Grok (grok-4.20-non-reasoning, provider factory in llm.py); embeddings/insights via OpenAI
+- **Object storage**: MinIO service (bucket humbowo-documents) on-server, S3-compatible; migrate to R2/Hetzner OS for off-server durability later
 - Credentials: server `.env` (gitignored) + `.keys/` (SSH key `humbowo_ed25519`)
 
 ## Old infrastructure (dead, discovered 2026-09-01)
