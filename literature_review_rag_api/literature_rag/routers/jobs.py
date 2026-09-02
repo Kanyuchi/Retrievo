@@ -1449,8 +1449,10 @@ async def chat_with_job(
             bm25_retriever=bm25_for_chat,
         )
 
-        # Initialize Groq client
-        groq_client = Groq(api_key=groq_api_key)
+        # Initialize chat LLM client (Groq or xAI, by key prefix)
+        from ..llm import get_chat_client, resolve_chat_model
+        groq_client = get_chat_client(groq_api_key)
+        config.llm.model = resolve_chat_model(groq_api_key, config.llm.model)
 
         # Build agentic config
         agentic_config = {
