@@ -12,12 +12,12 @@
 
 ## Tasks
 ### Task A: Verified deletion
-- [ ] `literature_rag/deletion.py`: `purge_job`, `purge_user` (correct FK order, best-effort storage/vector deletion with logged failures, DB deletions transactional)
-- [ ] Rewire `auth.py /me` (use purge_user) and `jobs.py DELETE /{job_id}` (owner-only; hard purge via purge_job)
-- [ ] Tests `tests/test_deletion.py`: build a user with job + documents + knowledge rows + member + invite + chat session, purge, assert every table empty for those ids; member-of-someone-else's-job user deletion leaves the job intact minus their membership
-- [ ] Full suite green; commit `feat: complete GDPR-grade purge for accounts and knowledge bases`
-- [ ] Deploy; prod-verify: temp user with KB+doc+invite deletes own account via API → DB rows gone (SQL check), MinIO object gone
+- [x] `literature_rag/deletion.py`: `purge_job`, `purge_user` (correct FK order, best-effort storage/vector deletion with logged failures, DB deletions transactional)
+- [x] Rewire `auth.py /me` (use purge_user) and `jobs.py DELETE /{job_id}` (owner-only; hard purge via purge_job)
+- [x] Tests `tests/test_deletion.py`: build a user with job + documents + knowledge rows + member + invite + chat session, purge, assert every table empty for those ids; member-of-someone-else's-job user deletion leaves the job intact minus their membership
+- [x] Full suite green; commit `feat: complete GDPR-grade purge for accounts and knowledge bases`
+- [x] Deploy; prod-verify: temp user with KB+doc+invite deletes own account via API → DB rows gone (SQL check), MinIO object gone
 ### Task B: Trust pages
-- [ ] 4 React pages + footer links; placeholders `{{LEGAL_NAME}} {{ADDRESS}} {{REGISTER}} {{CONTACT_EMAIL}}`; sub-processor table (Hetzner DE, Supabase/AWS Frankfurt, OpenAI US, xAI US, Stripe when added); no-training statement; deletion rights section pointing at account deletion
-- [ ] Lint+build; ship dist; commit `feat: legal & trust pages (privacy, impressum, DPA, EU hosting)`
-- [ ] Living docs; plan checkboxes
+- [x] 4 React pages + footer links; placeholders `{{LEGAL_NAME}} {{ADDRESS}} {{REGISTER}} {{CONTACT_EMAIL}}`; sub-processor table (Hetzner DE, Supabase/AWS Frankfurt, OpenAI US, xAI US, Stripe when added); no-training statement; deletion rights section pointing at account deletion
+- [x] Lint+build; ship dist; commit `feat: legal & trust pages (privacy, impressum, DPA, EU hosting)`
+- [x] Living docs; plan checkboxes

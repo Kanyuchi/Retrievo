@@ -29,6 +29,11 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 ## Product capabilities (selected)
 - Team workspaces (2026-09-02): KBs shareable via invite links; roles viewer/editor/owner enforced on all routes; owner's plan pays storage quotas
 
+## Trust & compliance
+- Deletion: KB delete + account delete are complete purges (vectors, files, graph, chat, members, invites) — prod-verified 2026-09-02
+- Public pages: /legal/privacy, /legal/impressum, /legal/dpa, /trust — placeholders pending TheNerdsInt legal details
+- Honesty stance: storage/DB in EU (Falkenstein/Frankfurt); LLM inference via OpenAI + xAI (US) under no-training API terms — disclosed on trust + privacy pages
+
 ## Testing
 - Local canonical: `./venv/bin/python -m pytest -q tests` (py3.12 venv, 25 tests) with conftest.py isolation (throwaway SQLite; never prod)
 - CI: same suite via GitHub Actions; retrieval-mechanics tests gate deploys

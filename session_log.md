@@ -111,3 +111,9 @@
 - Prod verified: chat answers with citations via grok-4.20-non-reasoning; uploaded PDF listed in MinIO bucket; 70 tests green
 - Quality observation for Phase 1 follow-up: generation context showed a truncated snippet (~110 chars, looks like title-length truncation) — the model correctly refused to invent facts; investigate context assembly with the golden-set eval
 - Test user purged; DB holds only Shaun's account
+
+## 2026-09-02 (evening 2) — Phase 4 complete: EU trust package
+- deletion.py: purge_job/purge_user (FK-safe order, best-effort external stores with logged failures) — fixes account deletion that would have FK-crashed on workspaces/knowledge tables; KB DELETE route now hard-purges by default (matching the UI's long-standing "permanently delete" promise; ?hard_delete=false for soft)
+- Prod-verified GDPR flow: temp account with KB+doc+invite deleted itself via DELETE /api/auth/me → users/jobs/vector_chunks/invites all 0, MinIO object gone; orphaned pre-purge test object also removed (bucket now empty = matches reality)
+- 4 public legal/trust pages live (subagent-built): /legal/privacy, /legal/impressum, /legal/dpa, /trust + global footer links; honest AI-processing disclosure (OpenAI/xAI US, no-training terms; stored documents stay EU); amber {{PLACEHOLDER}} tokens await TheNerdsInt legal details (name, address, register, VAT, managing director)
+- 72 tests green
