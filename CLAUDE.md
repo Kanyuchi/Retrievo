@@ -118,6 +118,16 @@ production data is written off. The product relaunches as **Humbowo** at **humbo
 
 Once the server exists, update this section with the real IP, SSH user/key, and deploy commands.
 
+### Running tests (local, canonical)
+```bash
+cd literature_review_rag_api
+./venv/bin/python -m pytest -q tests   # Python 3.12 venv, full isolation
+```
+`tests/conftest.py` pins every run to a throwaway SQLite DB and local paths —
+tests can never touch production Supabase. Never run the suite with production
+env vars injected (the old run-inside-prod-image workflow leaked test users
+into the prod DB; cleaned 2026-09-02).
+
 ---
 
 ## Dependency Management Rule

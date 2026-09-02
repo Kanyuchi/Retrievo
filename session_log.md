@@ -64,3 +64,10 @@
 - Test workflow: no local py3.12, so tests run in the prod Docker image on the server with volume-mounted sources (/root/phase1test)
 - Deployed + verified live: indexed KB returns correct chunk via hybrid path, no fusion-skip warnings
 - Deferred (per plan): Cohere reranker (needs key), chunking A/B + BGE-M3 eval (need corpus + spend)
+
+## 2026-09-02 (midday) — Local test environment fixed + prod DB cleaned
+- Installed Python 3.12 (brew), created literature_review_rag_api/venv, full requirements install — chromadb 0.4.24 works
+- Added tests/conftest.py: every pytest run defaults to throwaway SQLite + local indices + dummy creds (setdefault, overridable) — the app has no load_dotenv, so process env is authoritative
+- Full suite: 25 passed locally in 34s — server-Docker test workflow retired
+- Discovered + fixed fallout: earlier server-image test runs used prod env → test users (ui_smoke_*, unverified_*) in production Supabase. Deleted all 7 test users, 6 jobs, tokens; only Shaun's real account remains
+- CLAUDE.md: canonical test command + warning documented

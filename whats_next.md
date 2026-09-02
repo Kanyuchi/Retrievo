@@ -25,6 +25,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-02: Local py3.12 test env + conftest isolation; prod DB purged of test users; Phase 1 (hybrid chat retrieval + CI gate) deployed
 - 2026-09-02: **humbowo.com LIVE** — Hetzner cx23 provisioned via API, app deployed, DNS pointed, Let's Encrypt TLS, all security checks pass
 - 2026-09-02: Supabase Frankfurt DB live, schema initialized (16 tables), connection verified from app code
 - 2026-09-01: Backend made Postgres-ready; CORS/.env prepped; hosting + DB decided; living docs created; state audit after 3.5-month gap

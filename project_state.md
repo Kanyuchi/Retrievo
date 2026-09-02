@@ -23,6 +23,10 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 - Old AWS resources (Lightsail instance, S3 bucket `lit-rag-flow` in eu-north-1) were under a third-party account (Nguks') — presumed inaccessible. Production data (user DB SQLite, uploaded PDFs in S3, ChromaDB indices) presumed lost unless that account can be recovered.
 - Project CLAUDE.md deploy instructions reference the dead server — stale.
 
+## Testing
+- Local canonical: `./venv/bin/python -m pytest -q tests` (py3.12 venv, 25 tests) with conftest.py isolation (throwaway SQLite; never prod)
+- CI: same suite via GitHub Actions; retrieval-mechanics tests gate deploys
+
 ## Key decisions
 - 2026-09-01: New domain **humbowo.com** acquired (GoDaddy, registered 2026-09-01, GoDaddy DNS `domaincontrol.com` nameservers). Will replace IP-only / old-domain hosting.
 - Database was SQLite in a Docker volume (`DATABASE_URL=sqlite:///./data/db/literature_rag.db`); a new database is planned as part of the infrastructure rebuild (provider TBD).
