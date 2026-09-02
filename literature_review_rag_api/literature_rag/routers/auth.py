@@ -245,9 +245,10 @@ def _hard_delete_job_for_user(db: Session, job) -> None:
     """Hard delete a job and associated storage/indices."""
     cfg = load_config()
 
-    # Delete ChromaDB collection
+    # Delete vector collection (Chroma or Postgres, per VECTOR_BACKEND)
     try:
-        client = chromadb.PersistentClient(path=cfg.storage.indices_path)
+        from .jobs import get_job_collection
+        client, _ = get_job_collection(job)
         client.delete_collection(job.collection_name)
     except Exception:
         pass

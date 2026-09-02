@@ -6,6 +6,7 @@ Each job has its own BM25 index for hybrid search.
 """
 
 import logging
+import os
 from typing import Optional
 from pathlib import Path
 
@@ -97,8 +98,31 @@ def compute_document_relations(
     return related
 
 
-def get_job_collection(job: Job) -> tuple[chromadb.ClientAPI, chromadb.Collection]:
-    """Get or create ChromaDB collection for a job."""
+def vector_backend() -> str:
+    """Selected vector backend: 'chroma' (default) or 'pgvector'."""
+    return os.getenv("VECTOR_BACKEND", "chroma").strip().lower()
+
+
+_pg_schema_ready = False
+
+
+def ensure_pg_schema():
+    global _pg_schema_ready
+    if not _pg_schema_ready:
+        from ..database import engine
+        from ..pg_store import ensure_schema as _pg_ensure_schema
+        _pg_ensure_schema(engine)
+        _pg_schema_ready = True
+
+
+def get_job_collection(job: Job) -> tuple:
+    """Get or create the vector collection for a job (Chroma or Postgres)."""
+    if vector_backend() == "pgvector":
+        from ..database import engine
+        from ..pg_store import PgClientShim, PgVectorStore
+        ensure_pg_schema()
+        return PgClientShim(engine), PgVectorStore(job.collection_name, engine)
+
     client = chromadb.PersistentClient(path=config.storage.indices_path)
 
     try:
@@ -130,6 +154,21 @@ def get_job_bm25_retriever(job_id: int, collection=None) -> Optional[BM25Retriev
     # Check if hybrid search is enabled
     if not config.retrieval.use_hybrid:
         return None
+
+    if vector_backend() == "pgvector":
+        # Lexical search runs on Postgres FTS over the same rows the vector
+        # store writes — no pickle index, no cache, nothing to maintain.
+        from ..database import Job as _Job, engine, get_db_session
+        from ..pg_store import PgLexicalRetriever
+        db = get_db_session()
+        try:
+            job_row = db.query(_Job).filter(_Job.id == job_id).first()
+        finally:
+            db.close()
+        if not job_row:
+            return None
+        ensure_pg_schema()
+        return PgLexicalRetriever(job_row.collection_name, engine)
 
     # Check cache first
     if job_id in _job_bm25_cache:

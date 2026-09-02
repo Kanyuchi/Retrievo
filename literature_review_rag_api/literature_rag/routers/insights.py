@@ -27,6 +27,12 @@ config = load_config()
 
 
 def _get_job_collection(job):
+    from .jobs import get_job_collection
+    _, collection = get_job_collection(job)
+    return collection
+
+
+def _get_job_collection_legacy_unused(job):
     client = chromadb.PersistentClient(path=config.storage.indices_path)
     return client.get_collection(job.collection_name)
 
