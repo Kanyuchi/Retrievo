@@ -5,7 +5,7 @@
 ## Now
 1. Shaun: real Groq key (`gsk_…` from console.groq.com — the pasted one was xAI) → chat live
 2. Shaun: object storage bucket (Cloudflare R2 or Hetzner Object Storage) → paste S3 creds + endpoint; code support already shipped (S3_ENDPOINT_URL)
-3. Phase 3 (monetization): wire quota enforcement, team workspaces + roles, Stripe + Paystack (see ROADMAP.md)
+3. Phase 3c (billing): Stripe checkout/webhooks/portal + billing page — BLOCKED on Shaun creating the Stripe account (pricing locked: Free / €19 Pro / €25-seat Team, 3-seat min, academic discount); Paystack after
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
@@ -25,6 +25,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-02: Phase 3b — team workspaces (roles viewer/editor/owner, invite links, member management) live and E2E-verified on prod
 - 2026-09-02: Phase 3a — plan-tier quotas enforced (KB/upload/API-call) and verified on prod
 - 2026-09-02: Phase 2b — rq ingestion queue + worker container, Redis rate-limit/OAuth state, 2 uvicorn workers, async job uploads (frontend polling); CI repaired and verified green
 - 2026-09-02: Phase 2a — vectors + FTS live on Supabase pgvector behind VECTOR_BACKEND switch; CI parity gate with pgvector service container

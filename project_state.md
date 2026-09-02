@@ -25,6 +25,9 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 - Old AWS resources (Lightsail instance, S3 bucket `lit-rag-flow` in eu-north-1) were under a third-party account (Nguks') — presumed inaccessible. Production data (user DB SQLite, uploaded PDFs in S3, ChromaDB indices) presumed lost unless that account can be recovered.
 - Project CLAUDE.md deploy instructions reference the dead server — stale.
 
+## Product capabilities (selected)
+- Team workspaces (2026-09-02): KBs shareable via invite links; roles viewer/editor/owner enforced on all routes; owner's plan pays storage quotas
+
 ## Testing
 - Local canonical: `./venv/bin/python -m pytest -q tests` (py3.12 venv, 25 tests) with conftest.py isolation (throwaway SQLite; never prod)
 - CI: same suite via GitHub Actions; retrieval-mechanics tests gate deploys

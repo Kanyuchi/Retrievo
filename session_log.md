@@ -94,3 +94,13 @@
 - 4 new tests (KB limit, enterprise bypass, file-size rejection, daily-call exhaustion) — 49 total green
 - Deploy lesson: systemd-run needs --working-directory (compose found no config from /); verified fix by grepping the quota symbol inside the running container before re-testing
 - Prod verified: 4th KB create for a free user → 403 "Knowledge base limit reached (3). Upgrade plan for more."; worker container healthcheck shows unhealthy (inherited curl check — cosmetic, fix queued)
+
+## 2026-09-02 (night) — Phase 3b live: team workspaces with roles + invite links
+- Models: JobMember (viewer/editor, owner implicit) + JobInvite (token, expiry, max_uses) + CRUDs; membership.require_job_role helper
+- All 23 inline owner-only checks across jobs/chats/graph/insights routers replaced with role checks (viewer=read/query/chat, editor=+upload/delete/build, owner=manage); upload quota now charges the KB owner's plan
+- New endpoints: invites CRUD, POST /api/jobs/join/{token}, members list/remove/role-change; GET /api/jobs includes shared KBs with role
+- Frontend: Team card in JobDetail (invite link generation + copy, member management), /join/:token page, role badges, viewer-mode hides upload/delete — EN/DE strings included
+- Built via two parallel subagents (backend+frontend); backend agent caught a members-shape contract mismatch pre-commit; I fixed a flaky fixture (id() reuse → uuid)
+- Deploy blocked twice by server↔GitHub 'expected flush after ref listing' — fixed durably with git config http.version HTTP/1.1 on the server
+- Prod E2E (3 users): editor join+query+upload 200; viewer upload 403; shared KB listed with role; members endpoint correct — then all test data purged (only Shaun's account remains)
+- 66 tests green ×3 runs

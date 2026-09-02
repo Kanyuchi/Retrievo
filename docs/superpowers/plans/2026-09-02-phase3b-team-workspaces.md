@@ -20,20 +20,20 @@
 - Models in `database.py`: `JobMember(id, job_id FK, user_id FK, role str default "viewer", created_at, UniqueConstraint(job_id, user_id))`, `JobInvite(id, job_id FK, token str unique index, role str, created_by FK users, expires_at, max_uses int default 10, use_count int default 0, created_at)` + `JobMemberCRUD` (get_role, add, list_for_job, remove, list_job_ids_for_user) + `JobInviteCRUD` (create with `secrets.token_urlsafe(24)`, get_valid_by_token — checks expiry+uses, consume increments, list_for_job, delete)
 - New `literature_rag/membership.py`: `ROLE_ORDER = {"viewer": 1, "editor": 2, "owner": 3}`; `get_job_role(db, job, user_id)`; `require_job_role(db, job, user_id, min_role)` raising 403 HTTPException ("Access denied")
 - Tests `tests/test_membership.py`: owner implicit role; member roles; require raises correctly; invite create/validate/expiry/max-uses consume
-- [ ] Commit `feat: job membership + invite models and role helper`
+- [x] Commit `feat: job membership + invite models and role helper`
 
 ### Task 2: Replace 23 ownership checks per role mapping
 - jobs.py/chats.py/graph.py/insights.py: each `if job.user_id != current_user.id: raise ...` block → `require_job_role(db, job, current_user.id, "<mapped role>")`. chats.py: keep session-owner checks for sessions themselves (sessions are personal) — only the JOB access check loosens to viewer.
 - Upload quota: in both upload routes change `check_quota_for_upload(current_user.id, ...)` → `check_quota_for_upload(job.user_id, ...)` (owner's plan pays for storage).
 - `GET /api/jobs` (list route): return owned + member jobs, each item gains `"role"`. `JobCRUD.get_user_jobs` extended or route composes: owned (role=owner) + `JobMemberCRUD.list_job_ids_for_user` fetched jobs (their role).
 - Tests `tests/test_workspace_access.py` (TestClient): owner invites → second user joins via token → viewer can query but NOT upload (403); editor invite → can upload; non-member 403 on query; member sees KB in their /api/jobs list with role.
-- [ ] Commit `feat: role-based workspace access on all job routes`
+- [x] Commit `feat: role-based workspace access on all job routes`
 
 ### Task 3: Invite + member routes
 - In jobs.py: `POST /{job_id}/invites` (owner; body {role, expires_days=14, max_uses=10}) → {token, join_url: f"https://humbowo.com/join/{token}", role, expires_at}; `GET /{job_id}/invites` (owner); `DELETE /{job_id}/invites/{invite_id}` (owner); `POST /join/{token}` (any authed; consume + add member; idempotent if already member; owner joining = no-op) → {job_id, name, role}; `GET /{job_id}/members` (viewer) → owner + members with emails/names/roles; `DELETE /{job_id}/members/{user_id}` (owner; cannot remove owner); `PATCH /{job_id}/members/{user_id}` (owner; body {role}).
 - NOTE route ordering: `/join/{token}` must be declared BEFORE `/{job_id}` catch-alls or use distinct prefix — declare it early in the router.
 - Tests folded into test_workspace_access.py (join flow, remove member loses access, invite expiry 403/410).
-- [ ] Commit `feat: invite-link and member management endpoints`
+- [x] Commit `feat: invite-link and member management endpoints`
 
 ### Task 4: Frontend
 - `api.ts`: createInvite, joinWorkspace, listMembers, removeMember + Job type gains `role?`
@@ -41,13 +41,13 @@
 - New page `JoinWorkspace.tsx` at route `/join/:token`: if authed → call join → redirect to the KB; if not → redirect to login with returnTo.
 - `Jobs.tsx`: show role badge on shared KBs.
 - Lint + build green.
-- [ ] Commit `feat: workspace sharing UI (invite links, members, role badges)`
+- [x] Commit `feat: workspace sharing UI (invite links, members, role badges)`
 
 ### Task 5: Deploy + verify + docs
 - Push; server deploy via systemd-run with --working-directory; healthz.
 - Prod E2E: user A creates KB + editor invite; user B joins via token, uploads doc; viewer role blocks upload; cleanup both users.
 - Ship frontend dist; living docs; plan checkboxes.
-- [ ] Commit `docs: Phase 3b complete`
+- [x] Commit `docs: Phase 3b complete`
 
 ## Notes
 - Chat sessions remain personal (user_id-scoped) even inside shared KBs — sharing chat history is a later feature.
