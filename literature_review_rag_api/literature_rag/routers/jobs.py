@@ -1421,6 +1421,69 @@ async def upload_to_job(
         )
 
 
+@router.post("/{job_id}/upload/async")
+async def upload_to_job_async(
+    job_id: int,
+    file: UploadFile = File(..., description="PDF file to upload"),
+    phase: str = Form(..., description="Phase (e.g., 'Phase 1')"),
+    topic: str = Form(..., description="Topic category"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enqueue a PDF for background indexing.
+
+    Returns a task_id; poll GET /api/upload/{task_id}/status. Falls back to
+    inline processing when the queue is unavailable.
+    """
+    import uuid as _uuid
+
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Only PDF files are allowed")
+    safe_filename = sanitize_filename(file.filename)
+    if not safe_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Only PDF files are allowed")
+
+    contents = await file.read()
+    max_size = getattr(config.upload, "max_file_size", 52428800)
+    if len(contents) > max_size:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB")
+
+    # Staging dir shared between api and worker containers (compose volume)
+    staging = Path(os.getenv("UPLOADS_DIR", config.upload.temp_path))
+    staging.mkdir(parents=True, exist_ok=True)
+    task_id = _uuid.uuid4().hex[:16]
+    tmp_path = staging / f"{task_id}_{safe_filename}"
+    with open(tmp_path, "wb") as fh:
+        fh.write(contents)
+
+    from ..database import UploadTaskCRUD
+    from ..job_tasks import process_job_upload
+
+    UploadTaskCRUD.create(db, task_id=task_id, filename=safe_filename,
+                          phase=phase, topic=topic, status="queued",
+                          temp_file_path=str(tmp_path))
+
+    try:
+        from ..worker import WorkerManager
+        WorkerManager(backend="auto").enqueue(
+            process_job_upload, task_id, job.id, str(tmp_path),
+            phase, topic, file.filename, job_id=task_id)
+    except Exception as e:
+        logger.warning(f"Queue unavailable ({e}); processing upload inline")
+        process_job_upload(task_id, job.id, str(tmp_path), phase, topic, file.filename)
+
+    return {"task_id": task_id, "status_url": f"/api/upload/{task_id}/status"}
+
+
 @router.delete("/{job_id}/documents/{doc_id}")
 async def delete_job_document(
     job_id: int,
