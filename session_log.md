@@ -47,3 +47,12 @@
 - Key research findings: hybrid+rerank+eval-harness are table stakes; pgvector-on-Supabase is the right vector store at our scale; 73% of RAG failures are retrieval
 - Market: wedge = academia top-of-funnel → consulting/NGO teams on €25/seat Team tier; EU residency (already ours) is a sales asset; mobile money needed for Africa
 - Synthesized ROADMAP.md (5 phases, each with test gates) + published shareable artifact
+
+## 2026-09-02 (am) — Phase 0 launch hygiene executed
+- Hetzner firewall `humbowo-fw` created + applied (in: 22/80/443/icmp only); server auto-backups enabled
+- REQUIRE_HTTPS=true shipped to server; redeployed; healthz + site verified
+- storage.py: S3_ENDPOINT_URL support added (R2/Hetzner/MinIO) + compose/.env.example wiring; verified custom + default endpoints via boto3 meta
+- Live production E2E smoke PASSED: register → login → create KB → upload PDF (extract/chunk/embed/index) → query returns correct chunk
+- Server git pull conflict (data dir vs removed symlink) resolved by move-aside
+- Decision: per-job upload stays synchronous until Phase 2's queue (changing the response contract now would break the frontend for no durable gain)
+- Remaining Phase 0 (needs Shaun): Groq key (gsk_), object storage bucket creds, uptime-monitor account

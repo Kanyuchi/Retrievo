@@ -3,10 +3,10 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), live as **Humbowo** at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Shaun: paste `GROQ_API_KEY` and `OPENAI_API_KEY` into `literature_review_rag_api/.env` (clipboard routine) — chat + document indexing are dormant until then; Claude then ships them to the server and restarts the container
-2. Object storage for PDF uploads: create S3-compatible bucket (Cloudflare R2 free tier or Hetzner Object Storage), check storage code for custom-endpoint support, set AWS_* env vars
-3. Smoke-test the full user flow in the browser: register → create knowledge base → upload PDF → search → chat
-4. Set `REQUIRE_HTTPS=true` in server .env now that TLS is live (defense in depth)
+1. Shaun: real Groq key (`gsk_…` from console.groq.com — the pasted one was xAI) → chat live
+2. Shaun: object storage bucket (Cloudflare R2 or Hetzner Object Storage) → paste S3 creds + endpoint; code support already shipped (S3_ENDPOINT_URL)
+3. Begin Phase 1 (retrieval quality): wire hybrid BM25 into per-job query path + golden-set eval gate in CI (see ROADMAP.md)
+4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
 - Consider Claude Haiku 4.5 / Sonnet 5 for chat synthesis (best citation faithfulness; Groq free tier is the launch default)
