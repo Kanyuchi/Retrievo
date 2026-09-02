@@ -1206,7 +1206,16 @@ async def chat_with_job(
                 term_maps = json.loads(job.term_maps)
             except Exception:
                 term_maps = None
-        job_rag = JobCollectionRAG(collection, term_maps=term_maps, job_id=job_id)
+        bm25_for_chat = None
+        if config.retrieval.use_hybrid:
+            try:
+                bm25_for_chat = get_job_bm25_retriever(job_id, collection=collection)
+            except Exception as e:
+                logger.warning(f"BM25 unavailable for chat on job {job_id}: {e}")
+        job_rag = JobCollectionRAG(
+            collection, term_maps=term_maps, job_id=job_id,
+            bm25_retriever=bm25_for_chat,
+        )
 
         # Initialize Groq client
         groq_client = Groq(api_key=groq_api_key)
