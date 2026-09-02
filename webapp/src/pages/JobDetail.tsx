@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import type { Job, JobDocument, JobStats, UploadConfigResponse, RelatedDocumentInfo } from '../lib/api';
+import type { Job, JobDocument, JobStats, UploadConfigResponse, RelatedDocumentInfo, WorkspaceMember } from '../lib/api';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Upload,
@@ -18,6 +19,8 @@ import {
   Loader2,
   Plus,
   Link2,
+  Users,
+  Copy,
 } from 'lucide-react';
 
 interface UploadQueueItem {
@@ -76,7 +79,23 @@ export default function JobDetail() {
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
 
+  // Team / workspace sharing state
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<'viewer' | 'editor'>('viewer');
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
+
   const numericJobId = jobId ? parseInt(jobId, 10) : null;
+
+  // Treat missing role as owner for backward compat (jobs created before roles existed).
+  const role = job?.role ?? 'owner';
+  const isOwner = role === 'owner';
+  const isViewer = role === 'viewer';
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -119,6 +138,69 @@ export default function JobDetail() {
       loadJob();
     }
   }, [accessToken, numericJobId, loadJob]);
+
+  const loadMembers = useCallback(async () => {
+    if (!accessToken || !numericJobId) return;
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const data = await api.listWorkspaceMembers(numericJobId, accessToken);
+      setMembers(data);
+    } catch (err) {
+      setMembersError(err instanceof Error ? err.message : t('job_detail.team.members_failed'));
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [accessToken, numericJobId, t]);
+
+  // Members list is visible to the owner (viewer role can see it too per spec, but
+  // this section only renders for the owner) — load once we know the job is owned.
+  useEffect(() => {
+    if (accessToken && numericJobId && isOwner) {
+      loadMembers();
+    }
+  }, [accessToken, numericJobId, isOwner, loadMembers]);
+
+  const handleCreateInvite = async () => {
+    if (!accessToken || !numericJobId) return;
+    setIsCreatingInvite(true);
+    setInviteUrl(null);
+    setCopied(false);
+    try {
+      const invite = await api.createWorkspaceInvite(numericJobId, inviteRole, undefined, accessToken);
+      setInviteUrl(invite.join_url);
+      setInviteExpiresAt(invite.expires_at);
+      toast.success(t('job_detail.team.invite_created'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('job_detail.team.invite_failed'));
+    } finally {
+      setIsCreatingInvite(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error(t('job_detail.team.invite_failed'));
+    }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!accessToken || !numericJobId) return;
+    setRemovingMemberId(userId);
+    try {
+      await api.removeWorkspaceMember(numericJobId, userId, accessToken);
+      await loadMembers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('job_detail.team.remove_failed'));
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
 
   // Handle file selection for multi-upload
   const handleFilesSelected = (files: FileList | null) => {
@@ -362,21 +444,25 @@ export default function JobDetail() {
                 <MessageSquare className="h-5 w-5" />
                 {t('job_detail.query_title')}
               </button>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="flex items-center gap-2 px-4 py-2 text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
-                title={t('job_detail.clear_title')}
-              >
-                <Trash2 className="h-5 w-5" />
-                {t('job_detail.clear_title')}
-              </button>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-              >
-                <Upload className="h-5 w-5" />
-                {t('job_detail.upload_pdf')}
-              </button>
+              {!isViewer && (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
+                  title={t('job_detail.clear_title')}
+                >
+                  <Trash2 className="h-5 w-5" />
+                  {t('job_detail.clear_title')}
+                </button>
+              )}
+              {!isViewer && (
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <Upload className="h-5 w-5" />
+                  {t('job_detail.upload_pdf')}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -457,13 +543,15 @@ export default function JobDetail() {
                 <p className="text-muted-foreground mb-4">
                   {t('job_detail.upload_first_pdf')}
                 </p>
-                <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  <Upload className="h-5 w-5" />
-                  {t('job_detail.upload_pdf')}
-                </button>
+                {!isViewer && (
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    <Upload className="h-5 w-5" />
+                    {t('job_detail.upload_pdf')}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -531,18 +619,146 @@ export default function JobDetail() {
                             >
                               <Link2 className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => setDeleteDoc(doc)}
-                              className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {!isViewer && (
+                              <button
+                                onClick={() => setDeleteDoc(doc)}
+                                className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Team / Sharing Section (owner only) */}
+            {isOwner && (
+              <div className="mt-6 bg-card border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold text-foreground">{t('job_detail.team.title')}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {t('job_detail.team.subtitle')}
+                </p>
+
+                {/* Invite generator */}
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div>
+                    <label htmlFor="invite-role" className="block text-sm font-medium text-foreground mb-1">
+                      {t('job_detail.team.role_label')}
+                    </label>
+                    <select
+                      id="invite-role"
+                      name="inviteRole"
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as 'viewer' | 'editor')}
+                      className="px-3 py-2 border border-border rounded-lg bg-background text-foreground"
+                    >
+                      <option value="viewer">{t('job_detail.team.role_viewer')}</option>
+                      <option value="editor">{t('job_detail.team.role_editor')}</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleCreateInvite}
+                    disabled={isCreatingInvite}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isCreatingInvite ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Link2 className="h-4 w-4" />
+                    )}
+                    {isCreatingInvite ? t('job_detail.team.generating') : t('job_detail.team.generate_invite')}
+                  </button>
+                </div>
+
+                {inviteUrl && (
+                  <div className="mb-4 p-3 bg-secondary/50 rounded-lg flex items-center gap-3">
+                    <input
+                      readOnly
+                      value={inviteUrl}
+                      className="flex-1 bg-transparent text-sm text-foreground outline-none truncate"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <button
+                      onClick={handleCopyInviteLink}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copied ? t('job_detail.team.copied') : t('job_detail.team.copy_link')}
+                    </button>
+                    {inviteExpiresAt && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {t('job_detail.team.expires', { date: formatDate(inviteExpiresAt) })}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Members list */}
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-2">
+                    {t('job_detail.team.members_title')}
+                  </h4>
+                  {membersLoading && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t('job_detail.team.members_loading')}
+                    </div>
+                  )}
+                  {!membersLoading && membersError && (
+                    <div className="text-sm text-destructive">{membersError}</div>
+                  )}
+                  {!membersLoading && !membersError && members.length === 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      {t('job_detail.team.members_empty')}
+                    </div>
+                  )}
+                  {!membersLoading && members.length > 0 && (
+                    <ul className="divide-y divide-border">
+                      {members.map((member) => (
+                        <li
+                          key={member.user_id}
+                          className="flex items-center justify-between py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {member.name || member.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {member.email}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {member.role === 'owner' ? t('job_detail.team.owner_label') : member.role}
+                            </span>
+                            {member.role !== 'owner' && (
+                              <button
+                                onClick={() => handleRemoveMember(member.user_id)}
+                                disabled={removingMemberId === member.user_id}
+                                title={t('job_detail.team.remove_member')}
+                                className="p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                              >
+                                {removingMemberId === member.user_id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
           </div>

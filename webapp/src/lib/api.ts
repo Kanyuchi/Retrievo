@@ -344,6 +344,7 @@ export interface Job {
   chunk_count: number;
   created_at: string;
   updated_at: string;
+  role?: string;
 }
 
 export interface JobListResponse {
@@ -400,6 +401,28 @@ export interface JobQueryResponse {
   question: string;
   results: JobQueryResult[];
   message?: string;
+}
+
+// Workspace (team sharing) interfaces
+export interface WorkspaceInvite {
+  token: string;
+  join_url: string;
+  role: string;
+  expires_at: string;
+  invite_id: number;
+}
+
+export interface WorkspaceJoinResponse {
+  job_id: number;
+  name: string;
+  role: string;
+}
+
+export interface WorkspaceMember {
+  user_id: number;
+  email: string;
+  name: string | null;
+  role: string;
 }
 
 export interface JobChatResponse {
@@ -1101,6 +1124,77 @@ class ApiClient {
     }
     const response = await fetch(
       `${this.baseUrl}/api/jobs/${jobId}/documents/${encodeURIComponent(docId)}`,
+      {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || error.error || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  // ============================================
+  // Workspace (Team Sharing) Methods
+  // ============================================
+
+  // Create an invite link for a job (owner only)
+  async createWorkspaceInvite(
+    jobId: number,
+    role: 'viewer' | 'editor',
+    options?: { expires_days?: number; max_uses?: number },
+    accessToken?: string
+  ): Promise<WorkspaceInvite> {
+    const headers: Record<string, string> = {};
+    const bearer = this.resolveBearerToken(accessToken);
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/invites`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ role, ...options }),
+    });
+  }
+
+  // Join a workspace via an invite token
+  async joinWorkspace(token: string, accessToken?: string): Promise<WorkspaceJoinResponse> {
+    const headers: Record<string, string> = {};
+    const bearer = this.resolveBearerToken(accessToken);
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
+    }
+    return this.fetch(`/api/jobs/join/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers,
+    });
+  }
+
+  // List members of a job's workspace
+  async listWorkspaceMembers(jobId: number, accessToken?: string): Promise<WorkspaceMember[]> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch(`/api/jobs/${jobId}/members`, { headers });
+  }
+
+  // Remove a member from a job's workspace (owner only)
+  async removeWorkspaceMember(
+    jobId: number,
+    userId: number,
+    accessToken?: string
+  ): Promise<{ message: string }> {
+    const headers: Record<string, string> = {};
+    const bearer = this.resolveBearerToken(accessToken);
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
+    }
+    const response = await fetch(
+      `${this.baseUrl}/api/jobs/${jobId}/members/${userId}`,
       {
         method: 'DELETE',
         headers,

@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
 
 interface CreateJobModalProps {
   isOpen: boolean;
@@ -380,9 +381,16 @@ export default function Jobs() {
                       <Folder className="h-6 w-6 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">
-                        {job.name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground truncate">
+                          {job.name}
+                        </h3>
+                        {job.role && job.role !== 'owner' && (
+                          <Badge variant="secondary" className="bg-secondary/50 shrink-0">
+                            {t('jobs.shared_badge', { role: job.role })}
+                          </Badge>
+                        )}
+                      </div>
                       {job.description && (
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                           {job.description}

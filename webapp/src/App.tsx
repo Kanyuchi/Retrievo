@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
+import JoinWorkspace from './pages/JoinWorkspace';
 import KnowledgeInsights from './pages/KnowledgeInsights';
 import KnowledgeGraph from './pages/KnowledgeGraph';
 import DataSources from './pages/settings/DataSources';
@@ -68,6 +69,7 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/jobs/:jobId" element={<JobDetail />} />
+              <Route path="/join/:token" element={<JoinWorkspace />} />
               <Route path="/insights" element={<KnowledgeInsights />} />
               <Route path="/graph" element={<KnowledgeGraph />} />
               <Route path="/settings/data-sources" element={<DataSources />} />
