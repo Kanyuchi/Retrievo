@@ -215,7 +215,19 @@ class JobCollectionRAG:
             by_id = {i: (d, m) for i, d, m in zip(
                 fetched.get("ids", []), fetched.get("documents", []),
                 fetched.get("metadatas", []))}
-            dense_dist_map = dict(dense_pairs)
+
+            # Rank within the RRF-fused order (0 = best). _postprocess_results
+            # re-derives "score = 1 - dist" from whatever we put in `dists` and
+            # re-sorts/truncates to n_results by that score. If we handed back
+            # the raw dense distance here, that re-sort would silently discard
+            # the fusion result and fall back to dense-only ranking, dropping
+            # BM25-surfaced chunks (e.g. an exact keyword/figure match a plain
+            # embedding search ranks lower) whenever the candidate pool has to
+            # be trimmed. Using the fused rank instead keeps _postprocess_results'
+            # quality adjustments (page count, DOI) while preserving the fusion
+            # decision on which chunks make the cut.
+            fused_rank = {cid: rank for rank, (cid, _) in enumerate(fused)}
+            rank_denom = max(len(fused) - 1, 1)
 
             conditions = []
             if where_filter:
@@ -238,7 +250,7 @@ class JobCollectionRAG:
                 ids.append(cid)
                 docs.append(doc)
                 metas.append(meta)
-                dists.append(dense_dist_map.get(cid, 1.0))
+                dists.append(fused_rank[cid] / rank_denom)
             if not ids:
                 return dense_results
             return {"ids": [ids], "documents": [docs],
