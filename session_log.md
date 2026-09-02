@@ -79,3 +79,12 @@
 - Migration script (idempotent upsert) ran on server: old Chroma had 0 chunks (job 1 'work' was empty) — clean-slate cutover
 - Flipped production to VECTOR_BACKEND=pgvector; E2E verified: upload → chunk row visible in Supabase vector_chunks → hybrid query returns it; test user cleaned after
 - ChromaDB + BM25 pickles now legacy-only (rollback path); removal in Phase 2b
+
+## 2026-09-02 (evening) — Phase 2b live: rq queue, Redis state, multi-worker
+- Compose stack grew to api + worker (rq) + redis (AOF-persistent); Dockerfile now runs 2 uvicorn workers
+- job_tasks.py: ingestion extracted into process_job_upload (UploadTaskRecord lifecycle, temp cleanup) — sync route wraps it inline, new POST /api/jobs/{id}/upload/async enqueues it; status via existing DB-backed /api/upload/{task_id}/status
+- Redis-backed rate limiting (RedisFixedWindowCounter, auto-fallback to memory); OAuth state auto-upgraded to Redis via REDIS_URL
+- Frontend uploadToJob switched to async+poll INTERNALLY — JobDetail/Files pages untouched
+- CI honesty fix: backend job had been failing since the conftest commit (bare pytest lacks cwd on sys.path → python -m pytest) and frontend lint had 7 real errors (i18n escapes, shadcn export pattern, cytoscape anys) — all fixed, both jobs verified green on the exact run
+- Deploy fought SSH instability: hung compose killed (pkill self-match lesson), relaunched via systemd-run
+- E2E verified on prod: async upload → rq worker container processed it (worker logs confirm) → status completed → query returns chunk; 47 tests green; test user purged

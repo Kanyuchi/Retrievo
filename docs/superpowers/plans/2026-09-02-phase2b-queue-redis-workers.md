@@ -23,8 +23,8 @@
 
 **Files:** Modify `requirements.txt`, `requirements-prod.txt` (add `rq>=1.16` after `redis>=5.0.0`), `docker-compose.yml`, `Dockerfile`.
 
-- [ ] **Step 1:** Add `rq>=1.16` to both requirements files; `./venv/bin/pip install -q rq` locally.
-- [ ] **Step 2:** In `docker-compose.yml` add under `services:` (same level as `api:`):
+- [x] **Step 1:** Add `rq>=1.16` to both requirements files; `./venv/bin/pip install -q rq` locally.
+- [x] **Step 2:** In `docker-compose.yml` add under `services:` (same level as `api:`):
 
 ```yaml
   redis:
@@ -65,9 +65,9 @@
 
 Add `redis_data:` under top-level `volumes:`. Add to the `api:` service env: `- REDIS_URL=${REDIS_URL:-redis://redis:6379/0}` and `depends_on: [redis]`.
 **Check first whether `api:` uses `env_file: .env`** — if not, the explicit `environment:` list is the pattern; mirror it in `worker` (drop `env_file`).
-- [ ] **Step 3:** Dockerfile CMD → `CMD ["python", "-m", "uvicorn", "literature_rag.api:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]`
-- [ ] **Step 4:** `docker compose config --quiet` → exit 0. Full local suite green.
-- [ ] **Step 5:** Commit `chore: redis + rq worker services, 2 uvicorn workers`.
+- [x] **Step 3:** Dockerfile CMD → `CMD ["python", "-m", "uvicorn", "literature_rag.api:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]`
+- [x] **Step 4:** `docker compose config --quiet` → exit 0. Full local suite green.
+- [x] **Step 5:** Commit `chore: redis + rq worker services, 2 uvicorn workers`.
 
 ---
 
@@ -77,9 +77,9 @@ Add `redis_data:` under top-level `volumes:`. Add to the `api:` service env: `- 
 
 **Interfaces:** Produces `process_job_upload(task_id: str, job_id: int, tmp_path: str, phase: str, topic: str, original_filename: str) -> dict`. It: loads the Job, runs the SAME ingestion the sync route runs today, updates `UploadTaskRecord` (`status: processing→completed/failed`, `progress`, `result_json`/`error`), deletes `tmp_path`, returns the result dict.
 
-- [ ] **Step 1:** Read `upload_to_job` fully (`sed -n '1295,1420p' literature_rag/routers/jobs.py`). Move its post-validation body (temp-file handling through indexing and DB writes — everything after ownership/quota checks) into `job_tasks.process_job_upload`, parameterized as above. Import inside the function what's needed (`get_job_collection`, extractor, indexer, storage) to avoid import cycles: `from .routers.jobs import get_job_collection` is legal at call time.
-- [ ] **Step 2:** Rewrite the sync route to: validate → save upload to `/app/uploads/tmp/{uuid}_{filename}` (or `./uploads/tmp` when not in container: `Path(os.getenv("UPLOADS_DIR", "./uploads"))/"tmp"`) → create `UploadTaskRecord` via `UploadTaskCRUD.create` → call `process_job_upload(...)` **inline** (synchronous behavior preserved) → return its result. The sync route becomes a thin wrapper over the same function the queue runs.
-- [ ] **Step 3:** Test (no network: monkeypatch the ingestion internals):
+- [x] **Step 1:** Read `upload_to_job` fully (`sed -n '1295,1420p' literature_rag/routers/jobs.py`). Move its post-validation body (temp-file handling through indexing and DB writes — everything after ownership/quota checks) into `job_tasks.process_job_upload`, parameterized as above. Import inside the function what's needed (`get_job_collection`, extractor, indexer, storage) to avoid import cycles: `from .routers.jobs import get_job_collection` is legal at call time.
+- [x] **Step 2:** Rewrite the sync route to: validate → save upload to `/app/uploads/tmp/{uuid}_{filename}` (or `./uploads/tmp` when not in container: `Path(os.getenv("UPLOADS_DIR", "./uploads"))/"tmp"`) → create `UploadTaskRecord` via `UploadTaskCRUD.create` → call `process_job_upload(...)` **inline** (synchronous behavior preserved) → return its result. The sync route becomes a thin wrapper over the same function the queue runs.
+- [x] **Step 3:** Test (no network: monkeypatch the ingestion internals):
 
 ```python
 """process_job_upload updates UploadTaskRecord through the lifecycle."""
@@ -129,7 +129,7 @@ def test_process_job_upload_marks_failed(tmp_path):
 ```
 
 So `job_tasks.py` structure: `_ingest_pdf_to_job(job, tmp_path, phase, topic, original_filename) -> dict` (the moved body) and `process_job_upload(...)` (record lifecycle wrapper with try/except, calls `_ingest_pdf_to_job`, always cleans tmp file).
-- [ ] **Step 4:** Suite green (existing upload E2E behavior unchanged — sync route wraps the same code). Commit `refactor: extract job ingestion into queue-runnable job_tasks module`.
+- [x] **Step 4:** Suite green (existing upload E2E behavior unchanged — sync route wraps the same code). Commit `refactor: extract job ingestion into queue-runnable job_tasks module`.
 
 ---
 
@@ -137,7 +137,7 @@ So `job_tasks.py` structure: `_ingest_pdf_to_job(job, tmp_path, phase, topic, or
 
 **Files:** Modify `routers/jobs.py` (new route), `literature_rag/api.py` only if the status route rejects job tasks (verify: `GET /api/upload/{task_id}/status` reads `UploadTaskRecord` by task_id — job-agnostic → no change). Test `tests/test_job_upload_async.py`.
 
-- [ ] **Step 1:** New route in jobs.py (after the sync one):
+- [x] **Step 1:** New route in jobs.py (after the sync one):
 
 ```python
 @router.post("/{job_id}/upload/async")
@@ -185,8 +185,8 @@ async def upload_to_job_async(
 ```
 
 **Verify `WorkerManager.enqueue` signature** (worker.py:326) — pass `job_id=` only if supported; otherwise drop it.
-- [ ] **Step 2:** Verify the status route: `grep -n "upload/{task_id}/status" -A 20 literature_rag/api.py` — confirm it reads `UploadTaskCRUD.get_by_task_id` and requires no ownership tie to global uploads. If it 404s on unknown fields, adapt response mapping only.
-- [ ] **Step 3:** Test via TestClient (fake queue → runs inline path):
+- [x] **Step 2:** Verify the status route: `grep -n "upload/{task_id}/status" -A 20 literature_rag/api.py` — confirm it reads `UploadTaskCRUD.get_by_task_id` and requires no ownership tie to global uploads. If it 404s on unknown fields, adapt response mapping only.
+- [x] **Step 3:** Test via TestClient (fake queue → runs inline path):
 
 ```python
 """Async job upload enqueues (or inlines) and is pollable via status route."""
@@ -218,7 +218,7 @@ def test_async_upload_returns_task_and_status(tmp_path, monkeypatch):
 ```
 
 (Without REDIS_URL, `WorkerManager("auto")` uses InMemoryWorker → runs promptly, or the except-inline path fires; both end in a DB record the status route sees.)
-- [ ] **Step 4:** Suite green. Commit `feat: async per-job upload via rq queue with DB-backed status polling`.
+- [x] **Step 4:** Suite green. Commit `feat: async per-job upload via rq queue with DB-backed status polling`.
 
 ---
 
@@ -226,7 +226,7 @@ def test_async_upload_returns_task_and_status(tmp_path, monkeypatch):
 
 **Files:** Modify `literature_rag/rate_limiter.py`; Test `tests/test_rate_limit_redis.py`.
 
-- [ ] **Step 1:** Add after `SlidingWindowCounter`:
+- [x] **Step 1:** Add after `SlidingWindowCounter`:
 
 ```python
 class RedisFixedWindowCounter:
@@ -259,7 +259,7 @@ class RedisFixedWindowCounter:
 ```
 
 In `RateLimiter.__init__`, where counters are created (read lines 106-130 first): if `os.getenv("REDIS_URL")`, try `redis.Redis.from_url(...)` + `ping()`, use `RedisFixedWindowCounter(window_seconds=...)` for each counter; on any exception fall back to `SlidingWindowCounter` with a warning. Preserve constructor signature.
-- [ ] **Step 2:** Test with a duck-typed fake redis (no new dep):
+- [x] **Step 2:** Test with a duck-typed fake redis (no new dep):
 
 ```python
 class FakeRedis:
@@ -295,7 +295,7 @@ def test_redis_counter_increments_and_resets():
     assert c.increment("ip2") == 1  # isolation
 ```
 
-- [ ] **Step 3:** Existing rate-limit tests must still pass (they run without REDIS_URL → in-memory path). Suite green. Commit `feat: Redis-backed rate limiting when REDIS_URL is set`.
+- [x] **Step 3:** Existing rate-limit tests must still pass (they run without REDIS_URL → in-memory path). Suite green. Commit `feat: Redis-backed rate limiting when REDIS_URL is set`.
 
 ---
 
@@ -303,18 +303,18 @@ def test_redis_counter_increments_and_resets():
 
 **Files:** Modify `webapp/src/lib/api.ts` (~line 1040-1075 job upload method).
 
-- [ ] **Step 1:** Read the current method; keep name/signature/return type. New body: POST to `/api/jobs/${jobId}/upload/async`; then poll `GET /api/upload/${task_id}/status` every 1.5s (cap ~10 min); on `completed` resolve with `result_json`-derived object matching the old response shape; on `failed` throw with the record's error. Report coarse progress via the existing progress callback if one exists (map queued→10, processing→50+record.progress/2, completed→100).
-- [ ] **Step 2:** `npm run lint && npm run build` in webapp/ → green. Commit `feat: job uploads use async queue endpoint with status polling`.
+- [x] **Step 1:** Read the current method; keep name/signature/return type. New body: POST to `/api/jobs/${jobId}/upload/async`; then poll `GET /api/upload/${task_id}/status` every 1.5s (cap ~10 min); on `completed` resolve with `result_json`-derived object matching the old response shape; on `failed` throw with the record's error. Report coarse progress via the existing progress callback if one exists (map queued→10, processing→50+record.progress/2, completed→100).
+- [x] **Step 2:** `npm run lint && npm run build` in webapp/ → green. Commit `feat: job uploads use async queue endpoint with status polling`.
 
 ---
 
 ### Task 6: Deploy + verify
 
-- [ ] **Step 1:** Push; server `git pull && docker compose up -d --build api worker redis`. Wait healthz.
-- [ ] **Step 2:** Verify services: `docker ps` shows lit-rag-redis, lit-rag-worker up; api logs show "OAuth state store: Redis" and rate-limiter Redis line; `docker logs lit-rag-worker` shows rq listening on literature_rag.
-- [ ] **Step 3:** E2E async on prod: register temp user → create KB → POST `/upload/async` with smoke PDF → poll status to `completed` → query returns chunk → **verify the WORKER processed it** (`docker logs lit-rag-worker | grep <task_id or doc>`). Clean up temp user (SQL, as before).
-- [ ] **Step 4:** Ship rebuilt frontend `dist/*` to `/var/www/humbowo` + chown.
-- [ ] **Step 5:** Living docs + plan checkboxes; commit; push.
+- [x] **Step 1:** Push; server `git pull && docker compose up -d --build api worker redis`. Wait healthz.
+- [x] **Step 2:** Verify services: `docker ps` shows lit-rag-redis, lit-rag-worker up; api logs show "OAuth state store: Redis" and rate-limiter Redis line; `docker logs lit-rag-worker` shows rq listening on literature_rag.
+- [x] **Step 3:** E2E async on prod: register temp user → create KB → POST `/upload/async` with smoke PDF → poll status to `completed` → query returns chunk → **verify the WORKER processed it** (`docker logs lit-rag-worker | grep <task_id or doc>`). Clean up temp user (SQL, as before).
+- [x] **Step 4:** Ship rebuilt frontend `dist/*` to `/var/www/humbowo` + chown.
+- [x] **Step 5:** Living docs + plan checkboxes; commit; push.
 
 ## Self-review
 - ROADMAP Phase 2 item 3 (queue: Tasks 1-3,5,6), item 4 (Redis rate-limit Task 4; OAuth state free via REDIS_URL; multi-worker Task 1 Step 3). Chroma cleanup deliberately deferred until pgvector soak period passes.
