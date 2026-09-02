@@ -342,6 +342,9 @@ async def create_job(
     - term_maps: Optional term normalization maps
     - extractor_type: Document extraction type ("academic", "business", "generic", "auto")
     """
+    from ..quotas import check_quota_for_kb_creation
+    check_quota_for_kb_creation(current_user.id)
+
     # Create job in database
     job = JobCRUD.create(
         db=db,
@@ -894,6 +897,10 @@ async def query_job(
     Uses hybrid BM25 + dense search when enabled for improved retrieval.
     For LLM-powered answers with citations, use GET /{job_id}/chat instead.
     """
+    from ..quotas import check_quota_for_api_call, get_quota_service
+    check_quota_for_api_call(current_user.id)
+    get_quota_service().increment_api_calls(current_user.id)
+
     from ..embeddings import get_embeddings
 
     job = JobCRUD.get_by_id(db, job_id)
@@ -1186,6 +1193,10 @@ async def chat_with_job(
     - complexity: Query complexity classification
     - pipeline_stats: Execution statistics
     """
+    from ..quotas import check_quota_for_api_call, get_quota_service
+    check_quota_for_api_call(current_user.id)
+    get_quota_service().increment_api_calls(current_user.id)
+
     import os
     from groq import Groq
 
@@ -1376,6 +1387,9 @@ async def upload_to_job(
             detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB"
         )
 
+    from ..quotas import check_quota_for_upload
+    check_quota_for_upload(current_user.id, len(contents))
+
     # Save to temp file
     upload_id = str(uuid.uuid4())[:8]
     temp_dir = Path(config.upload.temp_path)
@@ -1456,6 +1470,9 @@ async def upload_to_job_async(
     if len(contents) > max_size:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                             detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f}MB")
+
+    from ..quotas import check_quota_for_upload
+    check_quota_for_upload(current_user.id, len(contents))
 
     # Staging dir shared between api and worker containers (compose volume)
     staging = Path(os.getenv("UPLOADS_DIR", config.upload.temp_path))
