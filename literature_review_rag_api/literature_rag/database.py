@@ -8,7 +8,7 @@ import os
 import logging
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, or_, Float, func
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Enum as SQLEnum, or_, Float, func, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from enum import Enum
@@ -365,6 +365,137 @@ class DefaultDocument(Base):
 
     def __repr__(self):
         return f"<DefaultDocument(id={self.id}, doc_id={self.doc_id})>"
+
+
+class JobMember(Base):
+    """Workspace membership: a user's role in another user's job (KB).
+
+    The job owner (job.user_id) is NOT stored here — ownership is implicit.
+    """
+    __tablename__ = "job_members"
+    __table_args__ = (UniqueConstraint("job_id", "user_id", name="uq_job_member"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="viewer")  # viewer | editor
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<JobMember(job_id={self.job_id}, user_id={self.user_id}, role={self.role})>"
+
+
+class JobInvite(Base):
+    """Shareable invite link for a job workspace."""
+    __tablename__ = "job_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    token = Column(String(64), unique=True, index=True, nullable=False)
+    role = Column(String(20), nullable=False, default="viewer")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    max_uses = Column(Integer, default=10)
+    use_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<JobInvite(job_id={self.job_id}, role={self.role})>"
+
+
+class JobMemberCRUD:
+    """CRUD for workspace membership."""
+
+    @staticmethod
+    def get_role(db: Session, job_id: int, user_id: int) -> Optional[str]:
+        m = db.query(JobMember).filter(
+            JobMember.job_id == job_id, JobMember.user_id == user_id).first()
+        return m.role if m else None
+
+    @staticmethod
+    def add(db: Session, job_id: int, user_id: int, role: str = "viewer") -> "JobMember":
+        existing = db.query(JobMember).filter(
+            JobMember.job_id == job_id, JobMember.user_id == user_id).first()
+        if existing:
+            return existing
+        m = JobMember(job_id=job_id, user_id=user_id, role=role)
+        db.add(m)
+        db.commit()
+        db.refresh(m)
+        return m
+
+    @staticmethod
+    def set_role(db: Session, job_id: int, user_id: int, role: str) -> Optional["JobMember"]:
+        m = db.query(JobMember).filter(
+            JobMember.job_id == job_id, JobMember.user_id == user_id).first()
+        if m:
+            m.role = role
+            db.commit()
+            db.refresh(m)
+        return m
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int) -> List["JobMember"]:
+        return db.query(JobMember).filter(JobMember.job_id == job_id).all()
+
+    @staticmethod
+    def list_job_ids_for_user(db: Session, user_id: int) -> List[tuple]:
+        rows = db.query(JobMember.job_id, JobMember.role).filter(
+            JobMember.user_id == user_id).all()
+        return [(r[0], r[1]) for r in rows]
+
+    @staticmethod
+    def remove(db: Session, job_id: int, user_id: int) -> bool:
+        n = db.query(JobMember).filter(
+            JobMember.job_id == job_id, JobMember.user_id == user_id).delete()
+        db.commit()
+        return n > 0
+
+
+class JobInviteCRUD:
+    """CRUD for invite links."""
+
+    @staticmethod
+    def create(db: Session, job_id: int, created_by: int, role: str = "viewer",
+               expires_days: int = 14, max_uses: int = 10) -> "JobInvite":
+        import secrets
+        from datetime import timedelta
+        inv = JobInvite(
+            job_id=job_id, token=secrets.token_urlsafe(24), role=role,
+            created_by=created_by, max_uses=max_uses,
+            expires_at=datetime.utcnow() + timedelta(days=expires_days) if expires_days else None,
+        )
+        db.add(inv)
+        db.commit()
+        db.refresh(inv)
+        return inv
+
+    @staticmethod
+    def get_valid_by_token(db: Session, token: str) -> Optional["JobInvite"]:
+        inv = db.query(JobInvite).filter(JobInvite.token == token).first()
+        if not inv:
+            return None
+        if inv.expires_at and inv.expires_at < datetime.utcnow():
+            return None
+        if inv.max_uses is not None and inv.max_uses >= 0 and inv.use_count >= inv.max_uses:
+            return None
+        return inv
+
+    @staticmethod
+    def consume(db: Session, invite: "JobInvite") -> None:
+        invite.use_count = (invite.use_count or 0) + 1
+        db.commit()
+
+    @staticmethod
+    def list_for_job(db: Session, job_id: int) -> List["JobInvite"]:
+        return db.query(JobInvite).filter(JobInvite.job_id == job_id).all()
+
+    @staticmethod
+    def delete(db: Session, job_id: int, invite_id: int) -> bool:
+        n = db.query(JobInvite).filter(
+            JobInvite.id == invite_id, JobInvite.job_id == job_id).delete()
+        db.commit()
+        return n > 0
 
 
 class RefreshToken(Base):
