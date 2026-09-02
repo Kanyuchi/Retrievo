@@ -12,12 +12,13 @@ from pathlib import Path
 
 import chromadb
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import (
     get_db, User, Job, Document, JobCRUD, DocumentCRUD, DocumentRelationCRUD,
     KnowledgeClaimCRUD, KnowledgeGapCRUD, KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
-    JobStatus, DocumentStatus, JobMemberCRUD
+    JobStatus, DocumentStatus, UserCRUD, JobMemberCRUD, JobInviteCRUD
 )
 from ..auth import get_current_user
 from ..models import (
@@ -31,7 +32,7 @@ from ..isolation import (
     get_tenant_context, TenantContext, verify_job_access,
     TenantScopedQuery
 )
-from ..membership import require_job_role
+from ..membership import require_job_role, get_job_role
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +408,215 @@ async def list_jobs(
         total=len(responses),
         jobs=responses
     )
+
+
+# ============================================================================
+# WORKSPACE SHARING: INVITES + MEMBERS
+#
+# NOTE: /join/{token} is declared here, before the /{job_id} catch-all routes
+# below, so a request to POST /api/jobs/join/xyz can never be captured by a
+# path template shaped like /{job_id}/... .
+# ============================================================================
+
+JOIN_BASE_URL = "https://humbowo.com/join"
+
+
+class CreateInviteRequest(BaseModel):
+    role: str = Field(..., description="viewer or editor")
+    expires_days: int = Field(default=14, ge=0, le=3650)
+    max_uses: int = Field(default=10, ge=1, le=10000)
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: str = Field(..., description="viewer or editor")
+
+
+def _invite_to_dict(invite) -> dict:
+    return {
+        "invite_id": invite.id,
+        "token": invite.token,
+        "join_url": f"{JOIN_BASE_URL}/{invite.token}",
+        "role": invite.role,
+        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+        "max_uses": invite.max_uses,
+        "use_count": invite.use_count,
+        "created_at": invite.created_at.isoformat() if invite.created_at else None,
+    }
+
+
+@router.post("/join/{token}")
+async def join_job_via_token(
+    token: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Join a workspace via an invite link/token. Any authenticated user."""
+    invite = JobInviteCRUD.get_valid_by_token(db, token)
+    if not invite:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite invalid or expired")
+
+    job = JobCRUD.get_by_id(db, invite.job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    existing_role = get_job_role(db, job, current_user.id)
+    if existing_role is not None:
+        # Already the owner or a member - idempotent, don't consume the invite.
+        return {"job_id": job.id, "name": job.name, "role": existing_role}
+
+    JobMemberCRUD.add(db, job.id, current_user.id, role=invite.role)
+    JobInviteCRUD.consume(db, invite)
+
+    return {"job_id": job.id, "name": job.name, "role": invite.role}
+
+
+@router.post("/{job_id}/invites")
+async def create_job_invite(
+    job_id: int,
+    request: CreateInviteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a shareable invite link for a job workspace. Owner only."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "owner")
+
+    if request.role not in ("viewer", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="role must be 'viewer' or 'editor'"
+        )
+
+    invite = JobInviteCRUD.create(
+        db, job_id=job.id, created_by=current_user.id, role=request.role,
+        expires_days=request.expires_days, max_uses=request.max_uses
+    )
+    return _invite_to_dict(invite)
+
+
+@router.get("/{job_id}/invites")
+async def list_job_invites(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List invite links for a job workspace. Owner only."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "owner")
+
+    invites = JobInviteCRUD.list_for_job(db, job_id)
+    return {"total": len(invites), "invites": [_invite_to_dict(inv) for inv in invites]}
+
+
+@router.delete("/{job_id}/invites/{invite_id}")
+async def delete_job_invite(
+    job_id: int,
+    invite_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Revoke an invite link. Owner only."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "owner")
+
+    deleted = JobInviteCRUD.delete(db, job_id, invite_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+    return {"message": "Invite revoked"}
+
+
+@router.get("/{job_id}/members")
+async def list_job_members(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List members of a job workspace (including the owner). Viewer+."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "viewer")
+
+    members = []
+    owner = UserCRUD.get_by_id(db, job.user_id)
+    if owner:
+        members.append({
+            "user_id": owner.id, "email": owner.email, "name": owner.name, "role": "owner"
+        })
+
+    for m in JobMemberCRUD.list_for_job(db, job_id):
+        user = UserCRUD.get_by_id(db, m.user_id)
+        if not user:
+            continue
+        members.append({
+            "user_id": user.id, "email": user.email, "name": user.name, "role": m.role
+        })
+
+    return members
+
+
+@router.delete("/{job_id}/members/{user_id}")
+async def remove_job_member(
+    job_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove a member from a job workspace. Owner only."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "owner")
+
+    if user_id == job.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the owner")
+
+    removed = JobMemberCRUD.remove(db, job_id, user_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    return {"message": "Member removed"}
+
+
+@router.patch("/{job_id}/members/{user_id}")
+async def update_job_member_role(
+    job_id: int,
+    user_id: int,
+    request: UpdateMemberRoleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change a member's role in a job workspace. Owner only."""
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "owner")
+
+    if request.role not in ("viewer", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="role must be 'viewer' or 'editor'"
+        )
+
+    if user_id == job.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role")
+
+    member = JobMemberCRUD.set_role(db, job_id, user_id, request.role)
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    user = UserCRUD.get_by_id(db, user_id)
+    return {
+        "user_id": user_id,
+        "email": user.email if user else None,
+        "name": user.name if user else None,
+        "role": member.role
+    }
 
 
 @router.get("/{job_id}", response_model=JobResponse)
