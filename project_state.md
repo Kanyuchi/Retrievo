@@ -13,7 +13,8 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 
 ## Production (LIVE since 2026-09-02)
 - **https://humbowo.com** — Hetzner cx23 `humbowo-prod` 178.105.211.235 (Falkenstein), host nginx + Let's Encrypt (auto-renew), Docker container `lit-rag-api`
-- **DB**: Supabase Postgres 17.6, Frankfurt (ref xhtuzovyiewmvlnmhjwh), Session pooler, 16 tables initialized
+- **DB**: Supabase Postgres 17.6, Frankfurt (ref xhtuzovyiewmvlnmhjwh), Session pooler, 16 app tables + vector_chunks (pgvector + FTS)
+- **Vectors/lexical**: VECTOR_BACKEND=pgvector in prod (2026-09-02); Chroma+BM25 pickles remain only as rollback (VECTOR_BACKEND=chroma)
 - **Pending**: GROQ/OPENAI keys (chat + indexing dormant), object storage bucket for uploads
 - Credentials: server `.env` (gitignored) + `.keys/` (SSH key `humbowo_ed25519`)
 

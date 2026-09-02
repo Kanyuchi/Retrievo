@@ -5,7 +5,7 @@
 ## Now
 1. Shaun: real Groq key (`gsk_…` from console.groq.com — the pasted one was xAI) → chat live
 2. Shaun: object storage bucket (Cloudflare R2 or Hetzner Object Storage) → paste S3 creds + endpoint; code support already shipped (S3_ENDPOINT_URL)
-3. Phase 2 (scale-ready architecture): pgvector migration + Postgres FTS + ingestion queue (see ROADMAP.md) — or Phase 1 leftovers when creds arrive (Cohere reranker key, corpus for chunking A/B)
+3. Phase 2b: Redis ingestion queue + async per-job upload + Redis rate-limit/OAuth state + multi-worker (see ROADMAP.md)
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
@@ -25,6 +25,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-02: Phase 2a — vectors + FTS live on Supabase pgvector behind VECTOR_BACKEND switch; CI parity gate with pgvector service container
 - 2026-09-02: Local py3.12 test env + conftest isolation; prod DB purged of test users; Phase 1 (hybrid chat retrieval + CI gate) deployed
 - 2026-09-02: **humbowo.com LIVE** — Hetzner cx23 provisioned via API, app deployed, DNS pointed, Let's Encrypt TLS, all security checks pass
 - 2026-09-02: Supabase Frankfurt DB live, schema initialized (16 tables), connection verified from app code

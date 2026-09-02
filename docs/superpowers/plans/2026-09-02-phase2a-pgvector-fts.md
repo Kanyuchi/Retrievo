@@ -34,7 +34,7 @@
   - `PgLexicalRetriever(collection_name: str, engine)` with `.is_ready() -> bool`, `.query(text: str, n_results: int = 50) -> List[Tuple[str, float]]`, no-op `.build_index(chunks, save=True)`, `.add_chunks(chunks, save=True) -> int` (returns 0), `.remove_chunks(ids, save=True) -> int` (0), `.remove_by_doc_id(doc_id, save=True) -> int` (0)
   - `PgClientShim(engine)` with `.delete_collection(name)`, `.get_collection(name) -> PgVectorStore`, `.create_collection(name, metadata=None) -> PgVectorStore`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 """PgVectorStore / PgLexicalRetriever integration tests.
@@ -148,7 +148,7 @@ def test_client_shim_delete_collection(engine):
     assert PgVectorStore("t_del", engine).count() == 0
 ```
 
-- [ ] **Step 2: Start local pgvector container and verify tests fail for the right reason**
+- [x] **Step 2: Start local pgvector container and verify tests fail for the right reason**
 
 ```bash
 docker run -d --name pgvec-test -e POSTGRES_PASSWORD=test -p 55432:5432 pgvector/pgvector:pg17
@@ -157,7 +157,7 @@ export TEST_PG_URL=postgresql://postgres:test@localhost:55432/postgres
 ```
 Expected: FAIL `ModuleNotFoundError: literature_rag.pg_store`.
 
-- [ ] **Step 3: Implement `literature_rag/pg_store.py`**
+- [x] **Step 3: Implement `literature_rag/pg_store.py`**
 
 ```python
 """Postgres-backed vector + lexical store (pgvector + FTS).
@@ -378,12 +378,12 @@ stmt = text(sql).bindparams(bindparam("ids", expanding=True))
 ```
 and pass `params["ids"] = list(ids)`.
 
-- [ ] **Step 4: Run pg tests + full suite**
+- [x] **Step 4: Run pg tests + full suite**
 
 Run: `TEST_PG_URL=postgresql://postgres:test@localhost:55432/postgres ./venv/bin/python -m pytest tests/test_pg_store.py -v && ./venv/bin/python -m pytest -q tests`
 Expected: pg tests pass; full suite still 25+ passed (pg tests skip without the env var).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add literature_rag/pg_store.py tests/test_pg_store.py
@@ -404,7 +404,7 @@ git commit -m "feat: Postgres pgvector+FTS store with Chroma-compatible interfac
 - Consumes: `PgVectorStore`, `PgLexicalRetriever`, `PgClientShim`, `ensure_schema` from Task 1; `literature_rag.database.engine`.
 - Produces: `vector_backend() -> str` helper in `jobs.py` (reads `VECTOR_BACKEND` env, default `"chroma"`); all three files route through backend-aware getters.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 """Backend switch: VECTOR_BACKEND=pgvector routes to PgVectorStore paths."""
@@ -436,12 +436,12 @@ def test_pgvector_backend_returns_pg_objects():
             assert isinstance(bm25, PgLexicalRetriever)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `./venv/bin/python -m pytest tests/test_backend_switch.py -v`
 Expected: FAIL (`vector_backend` / `ensure_pg_schema` don't exist).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 3a. In `jobs.py`, add near the top (after existing imports and `config = load_config()`):
 
@@ -510,12 +510,12 @@ def _get_job_collection(job):
 
 (Read the surrounding function first; keep its error handling as-is.)
 
-- [ ] **Step 4: Run new tests + full suite**
+- [x] **Step 4: Run new tests + full suite**
 
 Run: `./venv/bin/python -m pytest tests/test_backend_switch.py -v && ./venv/bin/python -m pytest -q tests`
 Expected: all pass (default backend unchanged ⇒ zero regressions).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add literature_rag/routers/jobs.py literature_rag/routers/insights.py literature_rag/routers/auth.py tests/test_backend_switch.py
@@ -534,7 +534,7 @@ git commit -m "feat: VECTOR_BACKEND switch routing collections to pgvector store
 - Consumes: Task 1 classes; `HybridScorer` from `bm25_retriever.py`.
 - Produces: CI job runs the full suite WITH `TEST_PG_URL` set, so pg-store + parity tests gate every push.
 
-- [ ] **Step 1: Write the parity test**
+- [x] **Step 1: Write the parity test**
 
 ```python
 """Parity: hybrid retrieval through PgVectorStore + PgLexicalRetriever
@@ -588,12 +588,12 @@ def test_pg_lexical_matches_expected_ranks(stores):
     assert lex.query("green industry phase-out", 1)[0][0] == "p3"
 ```
 
-- [ ] **Step 2: Run locally with the container**
+- [x] **Step 2: Run locally with the container**
 
 Run: `TEST_PG_URL=postgresql://postgres:test@localhost:55432/postgres ./venv/bin/python -m pytest tests/test_pg_parity.py -v`
 Expected: PASS.
 
-- [ ] **Step 3: Add pgvector service to CI**
+- [x] **Step 3: Add pgvector service to CI**
 
 In `.github/workflows/ci.yml`, locate the backend job (the one running `pytest -q tests`) and add under it:
 
@@ -619,12 +619,12 @@ and add to that job's test-step `env:`:
 
 (Read the existing workflow first and merge minimally — do not restructure other jobs.)
 
-- [ ] **Step 4: Full local suite + push and watch CI**
+- [x] **Step 4: Full local suite + push and watch CI**
 
 Run: `TEST_PG_URL=... ./venv/bin/python -m pytest -q tests` → all pass.
 Then commit/push and check: `gh run watch --exit-status` (or `gh run list -L1`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_pg_parity.py ../.github/workflows/ci.yml
@@ -642,7 +642,7 @@ git commit -m "test: pgvector parity gate with CI service container"
 - Consumes: `chromadb.PersistentClient`, `PgVectorStore`, `ensure_schema`, `database.engine`, `database.Job`.
 - Produces: idempotent CLI: `python scripts/migrate_chroma_to_pg.py [--indices-path PATH] [--dry-run]`.
 
-- [ ] **Step 1: Write the script**
+- [x] **Step 1: Write the script**
 
 ```python
 """Migrate all job Chroma collections into Postgres vector_chunks.
@@ -713,11 +713,11 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 2: Smoke locally (dry-run against empty local state)**
+- [x] **Step 2: Smoke locally (dry-run against empty local state)**
 
 Run: `./venv/bin/python scripts/migrate_chroma_to_pg.py --dry-run --indices-path /tmp/nonexistent-indices` with `DATABASE_URL=sqlite:///./tmp_mig.db` — expect clean "no collection, skipping"/empty output, exit 0 (sqlite lacks pgvector: run with `--dry-run` only locally; `ensure_schema` must therefore be called AFTER the dry-run check — adjust: move `ensure_schema(engine)` below `if args.dry_run` guard or wrap in try/except with a warning).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/migrate_chroma_to_pg.py
@@ -730,9 +730,9 @@ git commit -m "feat: idempotent Chroma-to-Postgres migration script"
 
 **Files:** none (operational). Server: `root@178.105.211.235`, app dir `/root/Retrievo/literature_review_rag_api`.
 
-- [ ] **Step 1: Deploy code** — push main; on server `git pull && docker compose up -d --build api`; wait for healthz.
+- [x] **Step 1: Deploy code** — push main; on server `git pull && docker compose up -d --build api`; wait for healthz.
 
-- [ ] **Step 2: Migrate data** — run the migration INSIDE the container (has chroma + env):
+- [x] **Step 2: Migrate data** — run the migration INSIDE the container (has chroma + env):
 
 ```bash
 ssh <server> "cd /root/Retrievo/literature_review_rag_api && \
@@ -741,13 +741,13 @@ ssh <server> "cd /root/Retrievo/literature_review_rag_api && \
 
 Expected: per-job `OK` lines. Verify count independently via psql/psycopg2: `SELECT collection, count(*) FROM vector_chunks GROUP BY 1;`
 
-- [ ] **Step 3: Flip backend** — add `VECTOR_BACKEND=pgvector` to server `.env` AND to `docker-compose.yml` environment passthrough (`- VECTOR_BACKEND=${VECTOR_BACKEND:-chroma}` — commit this line as part of Step 1 if not present); `docker compose up -d api`.
+- [x] **Step 3: Flip backend** — add `VECTOR_BACKEND=pgvector` to server `.env` AND to `docker-compose.yml` environment passthrough (`- VECTOR_BACKEND=${VECTOR_BACKEND:-chroma}` — commit this line as part of Step 1 if not present); `docker compose up -d api`.
 
-- [ ] **Step 4: E2E verify on production** — login smoke user, create KB, upload the smoke PDF (curl flow from session history), query returns the chunk; then `SELECT count(*) FROM vector_chunks WHERE collection LIKE 'job_%'` grew. Check logs for pg errors: `docker logs lit-rag-api --since 5m | grep -iE 'error|pg_store'`.
+- [x] **Step 4: E2E verify on production** — login smoke user, create KB, upload the smoke PDF (curl flow from session history), query returns the chunk; then `SELECT count(*) FROM vector_chunks WHERE collection LIKE 'job_%'` grew. Check logs for pg errors: `docker logs lit-rag-api --since 5m | grep -iE 'error|pg_store'`.
 
-- [ ] **Step 5: Rollback lever (document, don't run)** — set `VECTOR_BACKEND=chroma` in server `.env`, `docker compose up -d api`. Chroma data stays on disk untouched until Phase 2b cleanup.
+- [x] **Step 5: Rollback lever (document, don't run)** — set `VECTOR_BACKEND=chroma` in server `.env`, `docker compose up -d api`. Chroma data stays on disk untouched until Phase 2b cleanup.
 
-- [ ] **Step 6: Living docs + commit** — session_log entry, whats_next (move item to Done), project_state (architecture line: vectors+FTS in Supabase), push.
+- [x] **Step 6: Living docs + commit** — session_log entry, whats_next (move item to Done), project_state (architecture line: vectors+FTS in Supabase), push.
 
 ---
 

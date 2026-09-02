@@ -71,3 +71,11 @@
 - Full suite: 25 passed locally in 34s — server-Docker test workflow retired
 - Discovered + fixed fallout: earlier server-image test runs used prod env → test users (ui_smoke_*, unverified_*) in production Supabase. Deleted all 7 test users, 6 jobs, tokens; only Shaun's real account remains
 - CLAUDE.md: canonical test command + warning documented
+
+## 2026-09-02 (afternoon) — Phase 2a executed: vectors + lexical search live on Supabase pgvector
+- New literature_rag/pg_store.py: PgVectorStore (Chroma-collection-compatible: add/get/query/delete/count, L2 distance parity), PgLexicalRetriever (Postgres FTS 'simple' config, BM25Retriever-compatible, zero index maintenance), PgClientShim (delete_collection)
+- VECTOR_BACKEND env switch (default chroma) wired through jobs.py/insights.py/auth.py getters; instant rollback = flip env back
+- Tests: 10 pg_store integration + 3 backend-switch + 2 hybrid-parity; local pgvector Docker container (port 55433; 55432 was another project's); CI now runs a pgvector/pgvector:pg17 service container — 40 tests green locally and in CI
+- Migration script (idempotent upsert) ran on server: old Chroma had 0 chunks (job 1 'work' was empty) — clean-slate cutover
+- Flipped production to VECTOR_BACKEND=pgvector; E2E verified: upload → chunk row visible in Supabase vector_chunks → hybrid query returns it; test user cleaned after
+- ChromaDB + BM25 pickles now legacy-only (rollback path); removal in Phase 2b
