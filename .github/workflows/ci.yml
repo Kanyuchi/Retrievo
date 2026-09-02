@@ -14,6 +14,16 @@ jobs:
   backend-smoke:
     name: Backend Smoke Tests
     runs-on: ubuntu-latest
+    services:
+      pgvector:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: literature_review_rag_api
@@ -34,6 +44,8 @@ jobs:
           pip install -r requirements-prod.txt pytest
 
       - name: Run backend tests
+        env:
+          TEST_PG_URL: postgresql://postgres:test@localhost:55432/postgres
         run: pytest -q tests
 
   frontend-checks:
