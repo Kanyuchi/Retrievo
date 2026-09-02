@@ -5,12 +5,13 @@ Uses in-memory storage by default; can be extended to Redis for distributed depl
 """
 
 import hashlib
+import os
 import time
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Optional, Dict, Tuple, List
+from typing import Any, Optional, Dict, Tuple, List
 from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -103,6 +104,59 @@ class SlidingWindowCounter:
                 del self._buckets[client_id]
 
 
+class RedisFixedWindowCounter:
+    """Fixed-window counter on Redis (INCR + EXPIRE). Cross-process safe.
+
+    Slightly coarser than the in-memory sliding window; acceptable for API
+    limits and required once the app runs with multiple workers/replicas.
+    """
+
+    def __init__(self, redis_client, window_seconds: int = 60, prefix: str = "rl"):
+        self._redis = redis_client
+        self.window_seconds = window_seconds
+        self._prefix = prefix
+
+    def _key(self, client_id: str) -> str:
+        import time
+        window = int(time.time() // self.window_seconds)
+        return f"{self._prefix}:{client_id}:{window}"
+
+    def increment(self, client_id: str) -> int:
+        key = self._key(client_id)
+        pipe = self._redis.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, self.window_seconds * 2)
+        return int(pipe.execute()[0])
+
+    def get_count(self, client_id: str) -> int:
+        val = self._redis.get(self._key(client_id))
+        return int(val) if val else 0
+
+    def reset(self, client_id: str) -> None:
+        self._redis.delete(self._key(client_id))
+
+
+def _make_counter(window_seconds: int, redis_client, prefix: str):
+    if redis_client is not None:
+        return RedisFixedWindowCounter(redis_client, window_seconds=window_seconds, prefix=prefix)
+    return SlidingWindowCounter(window_seconds=window_seconds, bucket_count=10)
+
+
+def _redis_client_or_none():
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return None
+    try:
+        import redis as _redis
+        client = _redis.Redis.from_url(redis_url, socket_connect_timeout=2)
+        client.ping()
+        logger.info("Rate limiter backend: Redis")
+        return client
+    except Exception as e:
+        logger.warning(f"Rate limiter falling back to in-memory (Redis unavailable: {e})")
+        return None
+
+
 class RateLimiter:
     """Rate limiter with per-tenant support."""
 
@@ -113,12 +167,10 @@ class RateLimiter:
             config: Rate limit configuration
         """
         self.config = config
-        self._default_counter = SlidingWindowCounter(
-            window_seconds=config.window_seconds,
-            bucket_count=10
-        )
-        self._rule_counters: Dict[str, SlidingWindowCounter] = {
-            rule.name: SlidingWindowCounter(window_seconds=rule.window_seconds, bucket_count=10)
+        redis_client = _redis_client_or_none()
+        self._default_counter = _make_counter(config.window_seconds, redis_client, "rl:default")
+        self._rule_counters: Dict[str, Any] = {
+            rule.name: _make_counter(rule.window_seconds, redis_client, f"rl:{rule.name}")
             for rule in config.path_limits
         }
         self._sorted_rules = sorted(
