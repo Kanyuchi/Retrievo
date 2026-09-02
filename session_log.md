@@ -124,3 +124,11 @@
 - Brand sweep: README + UI strings → Humbowo (agent was stopped mid-commit by user; I verified lint/build and committed the clean work — revertible if the stop meant discard)
 - Low-bandwidth: cytoscape code-split → main bundle 1.44MB→902KB (gzip 423→255KB, −40% first load); nav breakpoint fix
 - All prod-verified; test accounts self-deleted via the GDPR purge (eating our own dogfood)
+
+## 2026-09-02 (night) — Phase 5 round 2: eval harness live, graph feature unlocked, UI polished
+- scripts/run_semantic_eval.py: corpus-agnostic golden-set eval (filename-based expectations survive re-uploads; P@k/recall/MRR; --min-precision gate) + scripts/make_demo_corpus.py (6 synthetic wrapped-PDF papers on German regional transitions, clearly disclaimed) + eval/demo_queries.yaml (8 queries)
+- Demo account (demo@humbowo.com) + KB "German Regional Transitions (Demo)" (job 19) on prod; baseline eval: recall 1.000, MRR 1.000 over 8 queries (P@5 bounded by 6-doc corpus size)
+- Graph build returned 0 entities from 24 claims → root cause: _extract_json dropped ```json-fenced LLM output (language tag survived fence stripping → json.loads failed silently). Fixed in graph.py + insights.py + regression test (77 tests). Post-fix: 139 entities / 116 edges / 26 clusters on the demo corpus
+- Knowledge graph UI polished (agent): cluster legend w/ highlight toggle, degree-scaled nodes, neighbor detail card, weighted bezier edges, loading/empty/error states, fit/layout/search controls — code-split preserved
+- Thesis corpus NOT on this machine (old laptop/S3 only) — semantic eval on real papers blocked on Shaun locating them; demo corpus stands in
+- Editor invite for Shaun minted on the demo KB (30 days, 3 uses)
