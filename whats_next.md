@@ -5,7 +5,7 @@
 ## Now
 1. Shaun: real Groq key (`gsk_…` from console.groq.com — the pasted one was xAI) → chat live
 2. Shaun: object storage bucket (Cloudflare R2 or Hetzner Object Storage) → paste S3 creds + endpoint; code support already shipped (S3_ENDPOINT_URL)
-3. Begin Phase 1 (retrieval quality): wire hybrid BM25 into per-job query path + golden-set eval gate in CI (see ROADMAP.md)
+3. Phase 2 (scale-ready architecture): pgvector migration + Postgres FTS + ingestion queue (see ROADMAP.md) — or Phase 1 leftovers when creds arrive (Cohere reranker key, corpus for chunking A/B)
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon

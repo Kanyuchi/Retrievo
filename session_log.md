@@ -56,3 +56,11 @@
 - Server git pull conflict (data dir vs removed symlink) resolved by move-aside
 - Decision: per-job upload stays synchronous until Phase 2's queue (changing the response contract now would break the frontend for no durable gain)
 - Remaining Phase 0 (needs Shaun): Groq key (gsk_), object storage bucket creds, uptime-monitor account
+
+## 2026-09-02 (noon) — Phase 1 executed: hybrid retrieval in chat path + CI eval gate
+- Correction to audit: raw search route already had hybrid; the dense-only gap was JobCollectionRAG (the CHAT/agentic path) — fixed there
+- job_rag.py: added injected bm25_retriever + _hybrid_fuse (RRF via existing HybridScorer, post-filters BM25 hits against where-filter, graceful fallback); chat route now injects the per-job BM25 retriever
+- New tests: HybridScorer characterization (4), JobCollectionRAG hybrid fakes (3), chat wiring check (1), deterministic retrieval-mechanics CI gate (3) — full suite 25 passed inside the production image
+- Test workflow: no local py3.12, so tests run in the prod Docker image on the server with volume-mounted sources (/root/phase1test)
+- Deployed + verified live: indexed KB returns correct chunk via hybrid path, no fusion-skip warnings
+- Deferred (per plan): Cohere reranker (needs key), chunking A/B + BGE-M3 eval (need corpus + spend)

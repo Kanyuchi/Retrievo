@@ -28,7 +28,7 @@
 - Consumes: `literature_rag.bm25_retriever.HybridScorer` (exists)
 - Produces: nothing new — locks in current fusion behavior before we depend on it
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 ```python
 """Characterization tests for HybridScorer RRF fusion."""
@@ -68,12 +68,12 @@ def test_rrf_respects_n_results():
     assert len(fused) == 3
 ```
 
-- [ ] **Step 2: Run tests — expect PASS (characterization of existing code)**
+- [x] **Step 2: Run tests — expect PASS (characterization of existing code)**
 
 Run: `cd literature_review_rag_api && python -m pytest tests/test_hybrid_scorer.py -v`
 Expected: 4 passed. If any fail, STOP — the fusion code doesn't behave as documented; report instead of "fixing" the test.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add literature_review_rag_api/tests/test_hybrid_scorer.py
@@ -92,7 +92,7 @@ git commit -m "test: characterization tests for HybridScorer RRF fusion"
 - Consumes: `BM25Retriever.query(text, n_results) -> List[Tuple[str, float]]`, `BM25Retriever.is_ready() -> bool`, `HybridScorer.combine_scores(...)`, `config.retrieval.use_hybrid` / `.bm25_candidates` / `.hybrid_method` / `.dense_weight` / `.rrf_k` (all already in `config/literature_config.yaml` `retrieval:` block — verify with `grep -n "use_hybrid\|bm25_candidates\|rrf_k" config/literature_config.yaml`; if `use_hybrid` is `false`, set it to `true` in this task).
 - Produces: `JobCollectionRAG.__init__(..., bm25_retriever: Optional[BM25Retriever] = None)`; private `self._dense_and_hybrid_query(expanded_query, query_embedding, candidate_k, where_filter) -> dict` returning the Chroma-results-shaped dict `{"ids": [[...]], "documents": [[...]], "metadatas": [[...]], "distances": [[...]]}` that the rest of `query()` already consumes.
 
-- [ ] **Step 1: Write failing tests with fake collection + fake retriever**
+- [x] **Step 1: Write failing tests with fake collection + fake retriever**
 
 ```python
 """Hybrid fusion inside JobCollectionRAG.query using fakes (no network)."""
@@ -177,12 +177,12 @@ def test_hybrid_respects_where_filter_postfilter():
         assert meta.get("phase") == "Phase 1"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_job_rag_hybrid.py -v`
 Expected: FAIL — `TypeError: __init__() got an unexpected keyword argument 'bm25_retriever'`
 
-- [ ] **Step 3: Implement in `job_rag.py`**
+- [x] **Step 3: Implement in `job_rag.py`**
 
 3a. Constructor — add parameter and hybrid config (after `self.term_maps = ...` block):
 
@@ -286,12 +286,12 @@ Expected: FAIL — `TypeError: __init__() got an unexpected keyword argument 'bm
 
 3e. Verify config: `grep -n "use_hybrid" config/literature_config.yaml` — if `use_hybrid: false`, change to `use_hybrid: true`.
 
-- [ ] **Step 4: Run new tests + full suite**
+- [x] **Step 4: Run new tests + full suite**
 
 Run: `python -m pytest tests/test_job_rag_hybrid.py tests/test_hybrid_scorer.py -v && python -m pytest -q tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add literature_rag/job_rag.py tests/test_job_rag_hybrid.py config/literature_config.yaml
@@ -310,7 +310,7 @@ git commit -m "feat: hybrid BM25+dense fusion in JobCollectionRAG chat retrieval
 - Consumes: `get_job_bm25_retriever(job_id, collection=None)` (jobs.py:121), `JobCollectionRAG(..., bm25_retriever=...)` from Task 2.
 - Produces: chat path constructs `JobCollectionRAG` with a live retriever.
 
-- [ ] **Step 1: Write the failing test (source-level wiring check + construction test)**
+- [x] **Step 1: Write the failing test (source-level wiring check + construction test)**
 
 ```python
 """Verify the chat route wires the BM25 retriever into JobCollectionRAG."""
@@ -328,12 +328,12 @@ def test_chat_route_injects_bm25_retriever():
     )
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_chat_hybrid_injection.py -v`
 Expected: FAIL (assertion).
 
-- [ ] **Step 3: Implement — modify jobs.py:1209**
+- [x] **Step 3: Implement — modify jobs.py:1209**
 
 Replace:
 
@@ -358,12 +358,12 @@ with:
 
 (`logger` and `config` are already module-level in jobs.py — verify with `grep -n "^logger\|^config" literature_rag/routers/jobs.py`.)
 
-- [ ] **Step 4: Run test + full suite**
+- [x] **Step 4: Run test + full suite**
 
 Run: `python -m pytest tests/test_chat_hybrid_injection.py -v && python -m pytest -q tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add literature_rag/routers/jobs.py tests/test_chat_hybrid_injection.py
@@ -382,7 +382,7 @@ git commit -m "feat: inject per-job BM25 retriever into chat retrieval path"
 - Consumes: `BM25Retriever`, `BM25Config` (bm25_retriever.py), `HybridScorer`.
 - Produces: a CI-gating test that fails if end-to-end BM25→fusion mechanics regress. Uses a tmp-path index, real tokenizer, no network.
 
-- [ ] **Step 1: Write the eval test**
+- [x] **Step 1: Write the eval test**
 
 ```python
 """Deterministic retrieval-mechanics gate: BM25 index + RRF fusion end to end.
@@ -443,16 +443,16 @@ def test_fusion_beats_single_method_on_split_corpus(bm25):
 
 **Note on `BM25Config`:** check its actual constructor first — `grep -n "class BM25Config" -A 12 literature_rag/bm25_retriever.py`. If it's a dataclass with different field names (e.g. requires `k1`/`b`), adjust only the constructor call, not the assertions.
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 Run: `python -m pytest tests/test_retrieval_mechanics.py -v`
 Expected: PASS (mechanics already work — this locks them in). If BM25 P@1 fails, investigate the tokenizer before touching thresholds.
 
-- [ ] **Step 3: Confirm CI picks it up**
+- [x] **Step 3: Confirm CI picks it up**
 
 Run: `grep -n "pytest" ../.github/workflows/ci.yml` (from literature_review_rag_api/) — the workflow must run the whole `tests` dir. If it lists individual files, add the new test files.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/test_retrieval_mechanics.py
@@ -465,12 +465,12 @@ git commit -m "test: deterministic retrieval-mechanics gate for CI"
 
 **Files:** none (operational)
 
-- [ ] **Step 1: Full local suite green**
+- [x] **Step 1: Full local suite green**
 
 Run: `python -m pytest -q tests`
 Expected: all pass, no skips in the new files.
 
-- [ ] **Step 2: Push and deploy**
+- [x] **Step 2: Push and deploy**
 
 ```bash
 git push origin main
@@ -478,7 +478,7 @@ ssh -i ../.keys/humbowo_ed25519 root@178.105.211.235 \
   "cd /root/Retrievo && git pull -q && cd literature_review_rag_api && docker compose up -d --build api"
 ```
 
-- [ ] **Step 3: Smoke-verify hybrid on production**
+- [x] **Step 3: Smoke-verify hybrid on production**
 
 Wait for `https://humbowo.com/api/healthz` → `{"status":"ok"}`, then re-run the E2E flow (register/login/create KB/upload smoke PDF/`GET /api/jobs/{id}/query?question=...`) and confirm results still return. Then check container logs for the hybrid path:
 
@@ -489,7 +489,7 @@ ssh -i ../.keys/humbowo_ed25519 root@178.105.211.235 \
 
 Expected: no "Hybrid fusion skipped" warnings during the smoke query.
 
-- [ ] **Step 4: Update living docs + commit**
+- [x] **Step 4: Update living docs + commit**
 
 Append session_log entry ("Phase 1 tasks 1-5: hybrid in chat path + CI eval gate"), move roadmap/whats_next items, commit docs, push.
 
