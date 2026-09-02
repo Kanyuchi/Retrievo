@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './contexts/AuthContext';
@@ -23,6 +23,27 @@ import MCP from './pages/settings/MCP';
 import Team from './pages/settings/Team';
 import Profile from './pages/settings/Profile';
 import NotFound from './pages/NotFound';
+import Privacy from './pages/legal/Privacy';
+import Impressum from './pages/legal/Impressum';
+import Dpa from './pages/legal/Dpa';
+import Trust from './pages/Trust';
+
+// Minimal footer shared across public pages (legal / trust links)
+function AppFooter() {
+  return (
+    <footer className="border-t border-border py-6 px-4 md:px-8">
+      <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+        <Link to="/legal/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/legal/impressum" className="hover:text-foreground transition-colors">Impressum</Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/legal/dpa" className="hover:text-foreground transition-colors">DPA</Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/trust" className="hover:text-foreground transition-colors">Trust</Link>
+      </div>
+    </footer>
+  );
+}
 
 // Layout component that conditionally shows MainNav
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -31,7 +52,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const showNav = !hideNavRoutes.some(route => location.pathname.startsWith(route));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {showNav && <MainNav />}
       <Toaster
         position="top-right"
@@ -44,9 +65,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           },
         }}
       />
-      <main className={showNav ? "pt-[72px]" : ""}>
+      <main className={`flex-1 ${showNav ? "pt-[72px]" : ""}`}>
         {children}
       </main>
+      <AppFooter />
     </div>
   );
 }
@@ -77,6 +99,11 @@ function App() {
               <Route path="/settings/mcp" element={<MCP />} />
               <Route path="/settings/team" element={<Team />} />
               <Route path="/settings/profile" element={<Profile />} />
+              {/* Legal & trust pages (public, no auth) */}
+              <Route path="/legal/privacy" element={<Privacy />} />
+              <Route path="/legal/impressum" element={<Impressum />} />
+              <Route path="/legal/dpa" element={<Dpa />} />
+              <Route path="/trust" element={<Trust />} />
               {/* Legacy route aliases */}
               <Route path="/settings/knowledge-insights" element={<Navigate to="/insights" replace />} />
               <Route path="/settings/knowledge-graph" element={<Navigate to="/graph" replace />} />
