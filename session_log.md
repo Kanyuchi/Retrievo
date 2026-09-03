@@ -132,3 +132,12 @@
 - Knowledge graph UI polished (agent): cluster legend w/ highlight toggle, degree-scaled nodes, neighbor detail card, weighted bezier edges, loading/empty/error states, fit/layout/search controls — code-split preserved
 - Thesis corpus NOT on this machine (old laptop/S3 only) — semantic eval on real papers blocked on Shaun locating them; demo corpus stands in
 - Editor invite for Shaun minted on the demo KB (30 days, 3 uses)
+
+## 2026-09-03 — Thesis corpus live on Humbowo: 56 papers indexed, real eval baseline recorded
+- Blank-page report: site verified healthy in clean browser (title, content, footer render; only logged-out 401s) — Shaun's Safari cache; hard-reload advised
+- Thesis corpus located in ~/Downloads (Phase 1/3/4 folders, 60 PDFs, 182MB) + MIT personality Bundle (deferred)
+- Batch upload saga: (1) initial batch died at my 10-min tool timeout → detached nohup runner; (2) 22 enqueue failures from 30-min JWT expiry on a 2h batch → per-file token refresh; (3) retry's dedupe prefetch failed silently → 38 duplicate doc versions → purged (kept newest), stats recomputed; (4) purge deleted SHARED deterministic storage keys → 36 objects restored from local files via staged tar+put_object; (5) 2 files failed on curl -F comma/apostrophe filename parsing → quoted syntax fixed it
+- Final: 56/59 extractable papers indexed (~5,900 chunks); 3 blocked as image-only scans (OCR not in container image — known gap)
+- Real golden-set baseline (eval/thesis_queries.yaml, 8 queries): recall@5 0.50, MRR 0.50, no reranker — 4 exact-paper rank-1 hits, 4 honest misses in a competitive corpus; eval matcher now normalizes filenames
+- Insights + knowledge graph building on full corpus (background); editor invite for Shaun minted (60 days)
+- Enterprise tier set on thesis service account (60 docs > free caps); playwright artifacts gitignored
