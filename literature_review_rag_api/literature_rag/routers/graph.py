@@ -224,9 +224,11 @@ async def build_knowledge_graph(
     require_job_role(db, job, current_user.id, "editor")
 
     claims = KnowledgeClaimCRUD.list_for_job(db, job_id, limit=claim_limit)
+    # FK-safe order: occurrences and edges reference entities, so they must
+    # be deleted first (Postgres enforces this; SQLite silently didn't).
+    KnowledgeEntityOccurrenceCRUD.delete_for_job(db, job_id)
     KnowledgeEdgeCRUD.delete_for_job(db, job_id)
     KnowledgeEntityCRUD.delete_for_job(db, job_id)
-    KnowledgeEntityOccurrenceCRUD.delete_for_job(db, job_id)
     KnowledgeClusterCRUD.delete_for_job(db, job_id)
 
     raw_entities: List[Dict[str, Any]] = []

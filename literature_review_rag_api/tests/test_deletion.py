@@ -69,3 +69,29 @@ def test_purge_member_keeps_job():
     from sqlalchemy import text
     assert db.execute(text("SELECT count(*) FROM chat_sessions WHERE user_id = :u"),
                       {"u": mid}).scalar() == 0              # their sessions gone
+
+
+def test_graph_clear_order_is_fk_safe():
+    """Occurrences/edges reference entities — clearing must delete them first
+    (regression: Postgres FK violation on graph rebuild)."""
+    from literature_rag.database import (
+        init_db, get_db_session, UserCRUD, JobCRUD,
+        KnowledgeEntityCRUD, KnowledgeEdgeCRUD, KnowledgeEntityOccurrenceCRUD,
+        KnowledgeClusterCRUD,
+    )
+    import uuid
+    init_db()
+    db = get_db_session()
+    u = UserCRUD.create(db, email=f"gfk-{uuid.uuid4().hex[:8]}@t.local", password_hash="x")
+    job = JobCRUD.create(db, user_id=u.id, name="gfk-kb")
+    e1 = KnowledgeEntityCRUD.get_or_create(db, job.id, "EntityA")
+    e2 = KnowledgeEntityCRUD.get_or_create(db, job.id, "EntityB")
+    KnowledgeEdgeCRUD.create(db, job.id, e1.id, e2.id, "related_to")
+    KnowledgeEntityOccurrenceCRUD.create(db, job.id, e1.id, "doc1")
+
+    # Same order as routers/graph.py build_knowledge_graph clear step
+    KnowledgeEntityOccurrenceCRUD.delete_for_job(db, job.id)
+    KnowledgeEdgeCRUD.delete_for_job(db, job.id)
+    KnowledgeEntityCRUD.delete_for_job(db, job.id)
+    KnowledgeClusterCRUD.delete_for_job(db, job.id)
+    assert KnowledgeEntityCRUD.count_for_job(db, job.id) == 0
