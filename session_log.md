@@ -141,3 +141,9 @@
 - Real golden-set baseline (eval/thesis_queries.yaml, 8 queries): recall@5 0.50, MRR 0.50, no reranker — 4 exact-paper rank-1 hits, 4 honest misses in a competitive corpus; eval matcher now normalizes filenames
 - Insights + knowledge graph building on full corpus (background); editor invite for Shaun minted (60 days)
 - Enterprise tier set on thesis service account (60 docs > free caps); playwright artifacts gitignored
+
+## 2026-09-03 (evening) — Thesis knowledge graph live after a three-bug hunt
+- Insights on full corpus: 394 claims, 364 gaps (documents_processed counter cosmetically wrong — logged)
+- Graph build failed three ways, each a real bug now fixed+tested: (1) nginx 60s proxy timeout on long builds → /api proxy_read_timeout 300s; (2) direct-to-uvicorn call hit our own REQUIRE_HTTPS 308 → X-Forwarded-Proto header (as nginx sends); (3) Postgres FK violation: graph rebuild cleared knowledge_entities before occurrences/edges referencing them — latent SQLite-masked bug, deletion order fixed + regression test (78 tests)
+- Final build: 200 claims (route's claim_limit default) → 328 entities, 337 edges; long-term: move insights/graph builds onto the rq queue like uploads (roadmap note)
+- Thesis KB complete: 56 papers, ~5,900 chunks, insights, gaps, interactive graph; editor invite live for Shaun

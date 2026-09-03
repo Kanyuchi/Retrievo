@@ -4,7 +4,7 @@
 
 ## Now
 1. Retrieval quality vs baseline (recall@5 0.50/MRR 0.50 on thesis corpus): Cohere reranker (needs key), chunking A/B — measured via scripts/run_semantic_eval.py
-2. Add OCR (tesseract) to Docker image for the 3 image-only scans; batch-uploader hardening lessons → future bulk-import feature
+2. Add OCR (tesseract) to Docker image for the 3 image-only scans; move insights/graph builds onto the rq queue (long builds vs HTTP timeouts); raise graph claim_limit handling for >200-claim corpora; bulk-import feature from uploader lessons
 2. Shaun: TheNerdsInt legal details (name, legal form, address, register court+number, VAT ID, managing director) → fill {{PLACEHOLDER}} tokens in legal pages
 3. Phase 3c (billing) when Stripe account exists; then Phase 5 differentiators (graph polish, low-bandwidth pass, chunking A/B with golden set)
 3. Phase 3c (billing): Stripe checkout/webhooks/portal + billing page — BLOCKED on Shaun creating the Stripe account (pricing locked: Free / €19 Pro / €25-seat Team, 3-seat min, academic discount); Paystack after
