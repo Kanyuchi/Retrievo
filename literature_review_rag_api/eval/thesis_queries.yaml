@@ -1,0 +1,27 @@
+# Golden queries for the real thesis corpus (job: Thesis Literature — Regional
+# Transitions). expected_files are lowercase substrings of the sanitized filename.
+queries:
+  - id: hard_coal_phaseout
+    query: "What policies managed Germany's hard coal mining phase-out from 1950 to 2018?"
+    expected_files: ["hard_coal"]
+  - id: splm_r_package
+    query: "Which R package implements spatial panel data models and how is it used?"
+    expected_files: ["splm"]
+  - id: relatedness_complexity
+    query: "How do relatedness and economic complexity shape regional development paths in Germany?"
+    expected_files: ["relatedness"]
+  - id: gelsenkirchen_solar
+    query: "How did Gelsenkirchen reinvent itself from coal city to solar city?"
+    expected_files: ["solar_city", "gelsenkirchen"]
+  - id: ruhr_appalachia
+    query: "How does the Ruhr region's transition compare with Appalachia?"
+    expected_files: ["ruhrorappalachia"]
+  - id: just_transition_generations
+    query: "What does a just transition for regions and generations mean in the Ruhr area?"
+    expected_files: ["just_transition"]
+  - id: redistribution_acceptance
+    query: "How much public acceptance is there for regional redistribution in Germany?"
+    expected_files: ["public_acceptan"]
+  - id: radical_right_regions
+    query: "What explains regional variation in support for radical right parties?"
+    expected_files: ["radical_right", "assessing_regio"]

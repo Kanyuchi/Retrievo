@@ -78,11 +78,18 @@ def main() -> int:
                 seen.add(did)
                 hits_docs.append(file_by_doc.get(did, "").lower())
 
+        import re
+
+        def _norm(t):
+            return re.sub(r"[^a-z0-9]+", "_", t.lower())
+
         def _match(fname):
-            return any(e in fname for e in expected)
+            nf = _norm(fname)
+            return any(_norm(e) in nf for e in expected)
 
         rel = [i for i, f in enumerate(hits_docs) if _match(f)]
-        matched_files = {e for e in expected if any(e in f for f in hits_docs)}
+        matched_files = {e for e in expected
+                         if any(_norm(e) in _norm(f) for f in hits_docs)}
         p = len(rel) / len(hits_docs) if hits_docs else 0.0
         r_ = len(matched_files) / len(expected)
         mrr = 1.0 / (rel[0] + 1) if rel else 0.0
