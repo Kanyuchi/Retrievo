@@ -378,11 +378,7 @@ export default function Home() {
                       Search Apps
                     </button>
                   </Link>
-                  <Link to="/agents">
-                    <button className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                      Agent
-                    </button>
-                  </Link>
+                  {/* disabled: stub — see 2026-09-05 audit (Agent page/route disabled, no backend) */}
                 </div>
               </div>
 

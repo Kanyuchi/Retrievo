@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
 import { api } from '../lib/api';
 import type { Job } from '../lib/api';
 import {
@@ -184,6 +185,7 @@ function DeleteConfirmModal({ job, onClose, onConfirm }: DeleteConfirmModalProps
 export default function Jobs() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
+  const { refreshKBs } = useKnowledgeBase();
   const { t } = useTranslation();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -226,6 +228,8 @@ export default function Jobs() {
     if (!accessToken) return;
     await api.createJob(name, description, accessToken);
     await loadJobs();
+    // Keep the header KB switcher in sync — it holds its own copy of the KB list.
+    await refreshKBs();
   };
 
   const handleDeleteJob = async () => {
@@ -233,6 +237,9 @@ export default function Jobs() {
     await api.deleteJob(deleteJob.id, accessToken);
     setDeleteJob(null);
     await loadJobs();
+    // Keep the header KB switcher in sync — it resets selection to the
+    // default collection if the deleted KB was the one selected.
+    await refreshKBs();
   };
 
   const filteredJobs = jobs.filter(

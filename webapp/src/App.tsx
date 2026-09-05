@@ -10,7 +10,8 @@ import Home from './pages/Home';
 import Dataset from './pages/Dataset';
 import Chat from './pages/Chat';
 import Search from './pages/Search';
-import Agent from './pages/Agent';
+// disabled: stub — see 2026-09-05 audit (Agent page has no working backend, "coming soon" toast only)
+// import Agent from './pages/Agent';
 import Files from './pages/Files';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
@@ -19,9 +20,12 @@ import JobDetail from './pages/JobDetail';
 import JoinWorkspace from './pages/JoinWorkspace';
 import KnowledgeInsights from './pages/KnowledgeInsights';
 import DataSources from './pages/settings/DataSources';
-import ModelProviders from './pages/settings/ModelProviders';
-import MCP from './pages/settings/MCP';
-import Team from './pages/settings/Team';
+// disabled: stub — see 2026-09-05 audit (mock providers/models, no API calls)
+// import ModelProviders from './pages/settings/ModelProviders';
+// disabled: stub — see 2026-09-05 audit (no modal, no request, static empty list)
+// import MCP from './pages/settings/MCP';
+// disabled: stub — see 2026-09-05 audit (all controls inert, mock "joined teams" row)
+// import Team from './pages/settings/Team';
 import Profile from './pages/settings/Profile';
 import NotFound from './pages/NotFound';
 import Privacy from './pages/legal/Privacy';
@@ -68,8 +72,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col">
       {showNav && <MainNav />}
       <Toaster
-        position="top-right"
+        position="bottom-right"
         theme="dark"
+        duration={5000}
         toastOptions={{
           style: {
             background: 'hsl(var(--card))',
@@ -98,7 +103,8 @@ function App() {
               <Route path="/datasets" element={<Dataset />} />
               <Route path="/chats" element={<Chat />} />
               <Route path="/searches" element={<Search />} />
-              <Route path="/agents" element={<Agent />} />
+              {/* disabled: stub — see 2026-09-05 audit (Create agent -> "coming soon" toast, no /api/agents) */}
+              {/* <Route path="/agents" element={<Agent />} /> */}
               <Route path="/files" element={<Files />} />
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
@@ -115,9 +121,10 @@ function App() {
                 }
               />
               <Route path="/settings/data-sources" element={<DataSources />} />
-              <Route path="/settings/model-providers" element={<ModelProviders />} />
-              <Route path="/settings/mcp" element={<MCP />} />
-              <Route path="/settings/team" element={<Team />} />
+              {/* disabled: stub — see 2026-09-05 audit */}
+              {/* <Route path="/settings/model-providers" element={<ModelProviders />} /> */}
+              {/* <Route path="/settings/mcp" element={<MCP />} /> */}
+              {/* <Route path="/settings/team" element={<Team />} /> */}
               <Route path="/settings/profile" element={<Profile />} />
               {/* Legal & trust pages (public, no auth) */}
               <Route path="/legal/privacy" element={<Privacy />} />

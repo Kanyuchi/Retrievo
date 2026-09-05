@@ -3,7 +3,18 @@ import SettingsSidebar from '@/components/SettingsSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Pencil, X, User } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/AuthContext';
+
+// No timezone field exists on the account yet — fall back to the browser's
+// detected zone instead of a hardcoded placeholder.
+function detectTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -28,6 +39,10 @@ const itemVariants = {
 };
 
 export default function Profile() {
+  const { user } = useAuth();
+  const displayName = user?.name || 'Not set';
+  const timeZone = detectTimeZone();
+
   return (
     <div className="flex min-h-[calc(100vh-72px)]">
       <SettingsSidebar />
@@ -52,7 +67,7 @@ export default function Profile() {
                 <Input
                   id="profile-name"
                   name="profileName"
-                  value="Kanyuchi"
+                  value={displayName}
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
                 />
@@ -90,7 +105,7 @@ export default function Profile() {
                 <Input
                   id="profile-timezone"
                   name="profileTimezone"
-                  value="UTC+8 Asia/Shanghai"
+                  value={timeZone}
                   readOnly
                   className="bg-secondary/50 border-border focus:border-primary"
                 />
@@ -109,7 +124,7 @@ export default function Profile() {
             <div className="flex items-start gap-8">
               <span className="w-24 pt-2 text-sm text-foreground">Email</span>
               <div className="flex-1">
-                <p className="text-foreground mb-1">shaunkudzi@gmail.com</p>
+                <p className="text-foreground mb-1">{user?.email || 'Not set'}</p>
                 <p className="text-xs text-muted-foreground">Once registered, E-mail cannot be changed.</p>
               </div>
             </div>

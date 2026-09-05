@@ -71,11 +71,14 @@ export function KnowledgeBaseProvider({ children }: { children: React.ReactNode 
 
       setAvailableKBs(kbs);
 
-      // If currently selected KB no longer exists, reset to default
+      // If currently selected KB no longer exists (e.g. it was just deleted),
+      // reset selection to the default collection and drop the stale
+      // localStorage pointer so a later reload doesn't try to restore it.
       if (selectedKB && !selectedKB.isDefault) {
         const stillExists = kbs.some(kb => kb.id === selectedKB.id);
         if (!stillExists) {
           setSelectedKB(DEFAULT_KB);
+          localStorage.removeItem('selected_kb');
         }
       }
     } catch (err) {

@@ -4,7 +4,7 @@ import SettingsSidebar from '@/components/SettingsSidebar';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 

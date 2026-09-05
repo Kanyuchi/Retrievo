@@ -1,29 +1,32 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Database, 
-  Box, 
-  Cpu, 
-  Users, 
-  User, 
-  Sun, 
+import {
+  Database,
+  User,
+  Sun,
   Moon,
   LogOut,
   ChevronRight,
   Home
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { path: '/settings/data-sources', label: 'Data sources', icon: Database },
-  { path: '/settings/model-providers', label: 'Model providers', icon: Box },
-  { path: '/settings/mcp', label: 'MCP', icon: Cpu },
-  { path: '/settings/team', label: 'Team', icon: Users },
+  // disabled: stub — see 2026-09-05 audit (mock providers/models, no API calls)
+  // { path: '/settings/model-providers', label: 'Model providers', icon: Box },
+  // disabled: stub — see 2026-09-05 audit (no modal, no request, static empty list)
+  // { path: '/settings/mcp', label: 'MCP', icon: Cpu },
+  // disabled: stub — see 2026-09-05 audit (all controls inert, mock "joined teams" row)
+  // { path: '/settings/team', label: 'Team', icon: Users },
   { path: '/settings/profile', label: 'Profile', icon: User },
 ];
 
 export default function SettingsSidebar() {
   const location = useLocation();
+  const { user } = useAuth();
+  const currentLabel = menuItems.find((item) => item.path === location.pathname)?.label ?? 'Settings';
 
   return (
     <aside className="w-[280px] min-h-[calc(100vh-72px)] bg-card border-r border-border flex flex-col">
@@ -34,7 +37,7 @@ export default function SettingsSidebar() {
             <Home className="w-4 h-4" />
           </Link>
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <span className="text-foreground">Profile</span>
+          <span className="text-foreground">{currentLabel}</span>
         </div>
       </div>
 
@@ -45,7 +48,10 @@ export default function SettingsSidebar() {
             <User className="w-6 h-6 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">shaunkudzi@gmail.com</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.name || user?.email || 'Account'}</p>
+            {user?.name && (
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            )}
           </div>
         </div>
       </div>

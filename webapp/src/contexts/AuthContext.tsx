@@ -11,7 +11,7 @@ interface AuthContextType {
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   handleOAuthCallback: (provider: 'google' | 'github', code: string, state?: string) => Promise<void>;
-  refreshAuth: () => Promise<boolean>;
+  refreshAuth: (silent?: boolean) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,29 +34,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Fetch current user with token
-  const fetchUser = useCallback(async (token?: string): Promise<UserResponse | null> => {
+  // `silent` suppresses console.error for expected anonymous-boot 401s.
+  const fetchUser = useCallback(async (token?: string, silent: boolean = false): Promise<UserResponse | null> => {
     try {
       const userData = await api.getCurrentUser(token);
       return userData;
     } catch (error) {
-      console.error('Failed to fetch user:', error);
+      if (!silent) {
+        console.error('Failed to fetch user:', error);
+      }
       return null;
     }
   }, []);
 
   // Refresh authentication
-  const refreshAuth = useCallback(async (): Promise<boolean> => {
+  // `silent` suppresses console.error for the expected "no refresh cookie yet"
+  // case during the anonymous first-load boot sequence.
+  const refreshAuth = useCallback(async (silent: boolean = false): Promise<boolean> => {
     try {
       const tokens = await api.refreshToken();
       saveTokens(tokens);
-      const userData = await fetchUser(tokens.access_token);
+      const userData = await fetchUser(tokens.access_token, silent);
       if (userData) {
         setUser(userData);
         return true;
       }
       return false;
     } catch (error) {
-      console.error('Failed to refresh auth:', error);
+      if (!silent) {
+        console.error('Failed to refresh auth:', error);
+      }
       clearTokens();
       return false;
     }
@@ -65,7 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      const userData = await fetchUser();
+      // First-load 401s here are expected for a logged-out visitor — don't
+      // console.error them, that's normal boot-time noise, not a real failure.
+      const userData = await fetchUser(undefined, true);
       if (userData) {
         setUser(userData);
         // Mark cookie-backed session as authenticated for components that still gate on accessToken.
@@ -75,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Try one refresh attempt using HttpOnly refresh cookie before marking guest state.
-      await refreshAuth();
+      await refreshAuth(true);
 
       setIsLoading(false);
     };

@@ -504,6 +504,51 @@ class ApiClient {
     return this.refreshPromise;
   }
 
+  // Strip placeholder/non-JWT bearer values (e.g. the cookie-session sentinel)
+  // so we never send them over the wire — cookie auth already covers those cases.
+  private sanitizeAuthHeader(headers: Record<string, string>): void {
+    if (headers.Authorization?.startsWith('Bearer ')) {
+      const token = headers.Authorization.slice(7).trim();
+      if (!token || token === this.cookieSessionSentinel || !this.isLikelyJwt(token)) {
+        delete headers.Authorization;
+      }
+    }
+  }
+
+  // Shared raw-fetch path for call sites that need the real Response object
+  // (blob downloads, manual polling, FormData bodies) instead of auto-parsed
+  // JSON. Applies the same header sanitization and 401 -> refresh -> retry-once
+  // behavior as the JSON `fetch()` path below, via the same shared refreshSession().
+  private async rawFetch(endpoint: string, options: RequestInit, allowRefresh: boolean = true): Promise<Response> {
+    const method = (options.method || 'GET').toUpperCase();
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string> | undefined),
+    };
+    this.sanitizeAuthHeader(headers);
+
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['X-CSRF-Token']) {
+      const csrf = this.getCookie('csrf_token');
+      if (csrf) {
+        headers['X-CSRF-Token'] = csrf;
+      }
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      credentials: 'include',
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401 && allowRefresh && this.shouldAttemptRefresh(endpoint)) {
+      const refreshed = await this.refreshSession();
+      if (refreshed) {
+        return this.rawFetch(endpoint, options, false);
+      }
+    }
+
+    return response;
+  }
+
   private async fetch<T>(endpoint: string, options?: RequestInit, allowRefresh: boolean = true): Promise<T> {
     const method = (options?.method || 'GET').toUpperCase();
     const headers: Record<string, string> = {
@@ -511,13 +556,7 @@ class ApiClient {
       ...(options?.headers as Record<string, string> | undefined),
     };
 
-    // Avoid overriding secure cookie auth with placeholder/non-JWT bearer tokens.
-    if (headers.Authorization?.startsWith('Bearer ')) {
-      const token = headers.Authorization.slice(7).trim();
-      if (!token || token === this.cookieSessionSentinel || !this.isLikelyJwt(token)) {
-        delete headers.Authorization;
-      }
-    }
+    this.sanitizeAuthHeader(headers);
 
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrf = this.getCookie('csrf_token');
@@ -656,7 +695,8 @@ class ApiClient {
     phase: string,
     topic: string,
     onProgress?: (progress: number) => void,
-    accessToken?: string
+    accessToken?: string,
+    allowRefresh: boolean = true
   ): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -684,6 +724,21 @@ class ApiClient {
           } catch {
             reject(new Error('Invalid response from server'));
           }
+        } else if (xhr.status === 401 && allowRefresh) {
+          // Retry once after a session refresh — matches the JSON fetch path's
+          // 401 -> refresh -> retry-once behavior.
+          this.refreshSession().then((refreshed) => {
+            if (refreshed) {
+              this.uploadPDF(file, phase, topic, onProgress, accessToken, false).then(resolve, reject);
+            } else {
+              try {
+                const error = JSON.parse(xhr.responseText);
+                reject(new Error(error.detail || `HTTP ${xhr.status}`));
+              } catch {
+                reject(new Error(`HTTP ${xhr.status}`));
+              }
+            }
+          });
         } else {
           try {
             const error = JSON.parse(xhr.responseText);
@@ -735,10 +790,9 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const response = await fetch(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
+    const response = await this.rawFetch(`/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
       headers,
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -767,11 +821,10 @@ class ApiClient {
       headers.Authorization = `Bearer ${bearer}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/api/upload/async`, {
+    const response = await this.rawFetch('/api/upload/async', {
       method: 'POST',
       headers,
       body: formData,
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -975,13 +1028,12 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const url = hardDelete
-      ? `${this.baseUrl}/api/jobs/${jobId}?hard_delete=true`
-      : `${this.baseUrl}/api/jobs/${jobId}`;
-    const response = await fetch(url, {
+    const endpoint = hardDelete
+      ? `/api/jobs/${jobId}?hard_delete=true`
+      : `/api/jobs/${jobId}`;
+    const response = await this.rawFetch(endpoint, {
       method: 'DELETE',
       headers,
-      credentials: 'include',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -997,10 +1049,9 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/clear`, {
+    const response = await this.rawFetch(`/api/jobs/${jobId}/clear`, {
       method: 'POST',
       headers,
-      credentials: 'include',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -1069,15 +1120,15 @@ class ApiClient {
     formData.append('topic', topic);
 
     const headers: Record<string, string> = {};
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
+    const bearer = this.resolveBearerToken(accessToken);
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/upload/async`, {
+    const response = await this.rawFetch(`/api/jobs/${jobId}/upload/async`, {
       method: 'POST',
       headers,
       body: formData,
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -1094,9 +1145,8 @@ class ApiClient {
     const timeoutMs = 10 * 60 * 1000;
     while (Date.now() - started < timeoutMs) {
       await new Promise((r) => setTimeout(r, 1500));
-      const statusRes = await fetch(`${this.baseUrl}/api/upload/${taskId}/status`, {
+      const statusRes = await this.rawFetch(`/api/upload/${taskId}/status`, {
         headers,
-        credentials: 'include',
       });
       if (!statusRes.ok) continue; // transient — keep polling
       const task = await statusRes.json();
@@ -1122,12 +1172,11 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const response = await fetch(
-      `${this.baseUrl}/api/jobs/${jobId}/documents/${encodeURIComponent(docId)}`,
+    const response = await this.rawFetch(
+      `/api/jobs/${jobId}/documents/${encodeURIComponent(docId)}`,
       {
         method: 'DELETE',
         headers,
-        credentials: 'include',
       }
     );
     if (!response.ok) {
@@ -1193,12 +1242,11 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const response = await fetch(
-      `${this.baseUrl}/api/jobs/${jobId}/members/${userId}`,
+    const response = await this.rawFetch(
+      `/api/jobs/${jobId}/members/${userId}`,
       {
         method: 'DELETE',
         headers,
-        credentials: 'include',
       }
     );
     if (!response.ok) {
@@ -1432,9 +1480,8 @@ class ApiClient {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    const response = await fetch(`${this.baseUrl}/api/chats/${sessionId}/export?format=${format}`, {
+    const response = await this.rawFetch(`/api/chats/${sessionId}/export?format=${format}`, {
       headers,
-      credentials: 'include',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));

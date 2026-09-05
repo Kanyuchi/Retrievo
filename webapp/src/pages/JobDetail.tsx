@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import type { Job, JobDocument, JobStats, UploadConfigResponse, RelatedDocumentInfo, WorkspaceMember } from '../lib/api';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   ArrowLeft,
   Upload,
