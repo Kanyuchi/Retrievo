@@ -86,7 +86,7 @@ extraction:
 
   # OCR settings (for scanned documents)
   # DISABLED BY DEFAULT for performance - scanned docs add 30+ sec per page
-  use_ocr_fallback: false  # Set to true if you have many scanned PDFs
+  use_ocr_fallback: true  # OCR fallback for scanned PDFs (tesseract eng+deu in image)
   ocr_dpi: 200             # Lower DPI = faster but less accurate
   ocr_language: "eng"      # Language for OCR (eng, deu, fra, etc.)
 
