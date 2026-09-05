@@ -1,0 +1,278 @@
+<title>Humbowo Functional Audit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F5F7F5; --surface:#FFFFFF; --ink:#15201C; --ink-2:#4A5954; --muted:#7D8B86; --line:#DCE3DF;
+  --accent:#0E7F63; --accent-soft:#E3F2EC;
+  --ok:#1E7F52; --ok-bg:#E2F3E9; --warn:#9A6B12; --warn-bg:#FBF0D6; --bad:#B23A32; --bad-bg:#F9E3E0; --stub:#5B6770; --stub-bg:#E8ECEE;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1311; --surface:#161C19; --ink:#E9EEEB; --ink-2:#B4BFB9; --muted:#7F8C86; --line:#27312D;
+    --accent:#3FB893; --accent-soft:#16332A;
+    --ok:#4FC386; --ok-bg:#15311F; --warn:#E0B24B; --warn-bg:#382B10; --bad:#F0796F; --bad-bg:#3B1B18; --stub:#A5B0B8; --stub-bg:#242C30;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1311; --surface:#161C19; --ink:#E9EEEB; --ink-2:#B4BFB9; --muted:#7F8C86; --line:#27312D;
+  --accent:#3FB893; --accent-soft:#16332A;
+  --ok:#4FC386; --ok-bg:#15311F; --warn:#E0B24B; --warn-bg:#382B10; --bad:#F0796F; --bad-bg:#3B1B18; --stub:#A5B0B8; --stub-bg:#242C30;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 28px 80px}
+header.top{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end;border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:28px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+h1{font-size:30px;line-height:1.15;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right;line-height:1.7}
+.meta b{color:var(--ink-2);font-weight:500}
+h2{font-size:20px;font-weight:600;margin:44px 0 12px;letter-spacing:-.005em}
+h2 small{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:400;margin-left:10px;letter-spacing:.04em}
+p{max-width:68ch;color:var(--ink-2);margin:0 0 12px}
+p.lede{color:var(--ink);font-size:16px}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:20px 0 6px}
+.strip div{background:var(--surface);padding:16px 18px}
+.strip .n{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;display:flex;align-items:center;gap:10px}
+.strip .l{font-size:12px;color:var(--muted);margin-top:6px;letter-spacing:.02em}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.stub{background:var(--stub)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink-2);margin:10px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.02em;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.chip.bad{color:var(--bad);background:var(--bad-bg)}
+.chip.stub{color:var(--stub);background:var(--stub-bg)}
+.causes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
+.cause{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;border-left:4px solid var(--bad)}
+.cause.warn{border-left-color:var(--warn)}
+.cause h3{margin:0 0 6px;font-size:16px;font-weight:600;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.cause h3 .sev{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--bad);font-weight:500}
+.cause.warn h3 .sev{color:var(--warn)}
+.cause p{font-size:14px;margin:0 0 8px;max-width:none}
+.cause .fix{font-size:13.5px;color:var(--ink);border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
+.cause .fix b{color:var(--accent);font-weight:600}
+code,kbd{font-family:var(--mono);font-size:.92em;background:var(--accent-soft);color:var(--ink);padding:1px 5px;border-radius:4px}
+.cause code,.tbl code{background:transparent;padding:0;color:var(--ink-2)}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:500;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td.ctl{color:var(--ink);font-weight:500;min-width:190px}
+td.ev{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:230px}
+td.ev .st{color:var(--ink-2)}
+tr.section td{background:var(--bg);font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);font-weight:500;padding:8px 14px}
+tr.section td span{color:var(--muted);text-transform:none;letter-spacing:0;margin-left:10px}
+.cfg{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.cfg .box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.cfg h3{margin:0 0 10px;font-size:14px;font-weight:600}
+.cfg ul{list-style:none;margin:0;padding:0;font-size:13.5px}
+.cfg li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.cfg li:last-child{border-bottom:none}
+.note{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 20px;margin-top:14px;font-size:14px}
+.note ol{margin:8px 0 0;padding-left:20px;color:var(--ink-2)}
+.note li{margin:4px 0}
+.method{font-size:13px;color:var(--muted);border-top:1px solid var(--line);margin-top:48px;padding-top:16px;max-width:none}
+@media (max-width:760px){
+  .strip{grid-template-columns:repeat(2,1fr)}
+  .causes,.cfg{grid-template-columns:1fr}
+  header.top{grid-template-columns:1fr}
+  .meta{text-align:left}
+}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <p class="eyebrow">Functional audit · humbowo.com</p>
+    <h1>Humbowo Functional Audit</h1>
+  </div>
+  <div class="meta">
+    <b>5 Sep 2026</b> · 11:20–12:55 (Bangkok)<br>
+    Account <b>Kanyuchi</b> (id 21, local login)<br>
+    Chrome desktop · 1255 px viewport · bundle <b>index-C-5aQF_5.js</b>
+  </div>
+</header>
+
+<p class="lede">Every clickable control across all 16 routes was exercised, with network and console traffic captured. Knowledge-base CRUD, insights and graph work end to end. Everything touching the public demo collection is down (one backend dependency), PDF upload is blocked by a client-side auth bug, and every deep link or page refresh renders a white screen because the build uses relative asset paths.</p>
+
+<div class="strip">
+  <div><div class="n"><span class="dot ok"></span>17</div><div class="l">Checks working as intended</div></div>
+  <div><div class="n"><span class="dot bad"></span>10</div><div class="l">Broken (error or white screen)</div></div>
+  <div><div class="n"><span class="dot stub"></span>13</div><div class="l">Dead / placeholder UI (no request, no effect)</div></div>
+  <div><div class="n"><span class="dot warn"></span>8</div><div class="l">Works but misleading or inconsistent</div></div>
+</div>
+<div class="legend">
+  <span><span class="dot ok"></span>Works — renders real data, request succeeds</span>
+  <span><span class="dot bad"></span>Broken — visible error, 4xx/5xx, or blank render</span>
+  <span><span class="dot stub"></span>Stub — control exists, does nothing / hardcoded mock data</span>
+  <span><span class="dot warn"></span>Partial — functions, but shows wrong or stale state</span>
+</div>
+
+<h2>Root causes <small>4 defects explain most failures</small></h2>
+<div class="causes">
+  <div class="cause">
+    <h3>Relative asset paths break every deep link <span class="sev">Critical</span></h3>
+    <p><code>index.html</code> loads <code>./assets/index-C-5aQF_5.js</code>. On any nested URL the browser requests <code>/jobs/assets/…</code> or <code>/legal/assets/…</code>, the SPA fallback returns HTML (<code>content-type: text/html</code>, 200), no script runs, and the React root stays empty — a blank white page with no console error.</p>
+    <p>Affects: refresh on <code>/jobs/:id</code>, <code>/settings/*</code>, the invite link <code>/join/:token</code>, and all three legal pages. Top-level routes (<code>/chats</code>, <code>/datasets</code>, …) load only because they have one path segment.</p>
+    <div class="fix"><b>Fix</b> · set Vite <code>base: '/'</code> (or <code>&lt;base href="/"&gt;</code>) so script/CSS tags are absolute; optionally make the server return 404 for <code>*/assets/*</code> misses so this can't silently regress.</div>
+  </div>
+  <div class="cause">
+    <h3>Public demo backend is down <span class="sev">Critical</span></h3>
+    <p><code>GET /api/stats</code>, <code>/api/papers</code>, <code>/api/documents</code>, <code>/api/search</code>, <code>/api/chat</code> all return <code>503 {"error":"Internal server error"}</code>. The Dataset, Chat, Search and Files pages therefore fail, the home page shows "0 papers" while the switcher claims 85 docs / 14,590 chunks, and every page load fires <code>/api/stats</code> twice and fails twice.</p>
+    <p>Job-scoped endpoints (<code>/api/jobs/*</code>) on the same host are healthy, so this is the demo collection's vector store / DB connection, not the API process.</p>
+    <div class="fix"><b>Fix</b> · check the demo collection's database/vector-store connection and the <code>/api/stats</code> handler; add a health endpoint (<code>/api/health</code> currently 404) so this is visible from monitoring.</div>
+  </div>
+  <div class="cause">
+    <h3>PDF upload sends a placeholder bearer token <span class="sev">Critical</span></h3>
+    <p>The upload request to <code>POST /api/jobs/:id/upload/async</code> carries <code>Authorization: Bearer __cookie_session__</code> (literal string). The backend tries to validate it as a JWT and answers <code>401 {"error":"Invalid or expired token"}</code> even seconds after a fresh session. Every other call in the app omits the header and authenticates by cookie successfully.</p>
+    <p>Reproduced twice, including immediately after a successful token refresh. No document can be added to a knowledge base through the UI right now.</p>
+    <div class="fix"><b>Fix</b> · drop the Authorization header in the upload client (cookie auth already works — a hand-built cookie-only request reached the validator and got a field-level 422, not 401), or have the backend fall back to the session cookie when the bearer value is the sentinel.</div>
+  </div>
+  <div class="cause warn">
+    <h3>Access token expiry is not handled in-session <span class="sev">High</span></h3>
+    <p>About an hour in, every API call started returning <code>401 Not authenticated</code> (<code>/api/jobs/22/clear</code>, then <code>/api/auth/me</code> and <code>/api/jobs</code>). The UI showed "Knowledge base not found · Not authenticated" instead of re-authenticating. A hard reload fixed it: the boot sequence calls <code>/api/auth/refresh</code> (200) and continues. Console at boot also logs <code>Failed to fetch user: Not authenticated</code> and <code>Failed to refresh auth: Refresh token missing</code> before recovering.</p>
+    <div class="fix"><b>Fix</b> · add a 401 interceptor in the API client that calls <code>/api/auth/refresh</code> once and retries; redirect to login only if refresh fails. Silence the expected first-load 401 noise.</div>
+  </div>
+</div>
+
+<h2>Control-by-control inventory <small>grouped by route</small></h2>
+<div class="tblwrap">
+<table>
+<thead><tr><th>Control</th><th>Result</th><th>Observed</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr class="section"><td colspan="4">Global header &amp; navigation <span>present on every route</span></td></tr>
+<tr><td class="ctl">Hamburger menu (☰)</td><td><span class="chip warn">Partial</span></td><td>Opens the six-item nav drawer. Drawer is clipped at the right edge of the viewport; Escape doesn't close it (click-outside does).</td><td class="ev">Radix warning: <span class="st">DialogContent requires a DialogTitle</span></td></tr>
+<tr><td class="ctl">Knowledge base switcher</td><td><span class="chip warn">Partial</span></td><td>Lists Public Demo + own KBs and switches context. Newly created KB doesn't appear until page reload; deleted KB stays selected (stale <code>selected_kb</code> in localStorage) until manually switched.</td><td class="ev">GET /api/jobs <span class="st">200</span></td></tr>
+<tr><td class="ctl">Discord icon</td><td><span class="chip stub">Stub</span></td><td>Button with no href and no handler — nothing happens, no tab opens.</td><td class="ev">MainNav.tsx:121</td></tr>
+<tr><td class="ctl">GitHub icon</td><td><span class="chip stub">Stub</span></td><td>Same as Discord.</td><td class="ev">MainNav.tsx:126</td></tr>
+<tr><td class="ctl">Language (English / Deutsch)</td><td><span class="chip ok">Works</span></td><td>Full UI translates to German and back; persisted.</td><td class="ev">localStorage <span class="st">lit_rag_lang</span></td></tr>
+<tr><td class="ctl">Help (?)</td><td><span class="chip stub">Stub</span></td><td>Highlights on click, no popover, no navigation.</td><td class="ev">MainNav.tsx:151</td></tr>
+<tr><td class="ctl">Theme toggle (moon)</td><td><span class="chip stub">Stub</span></td><td>No class or attribute changes on <code>&lt;html&gt;</code>; page stays dark. Same for the sun/moon pair in the settings sidebar.</td><td class="ev">body bg stays <span class="st">rgb(13,13,13)</span></td></tr>
+<tr><td class="ctl">Avatar menu (K)</td><td><span class="chip ok">Works</span></td><td>Opens 10-item menu; all items navigate.</td><td class="ev">—</td></tr>
+<tr><td class="ctl">Toasts</td><td><span class="chip warn">Partial</span></td><td>Success and error toasts never auto-dismiss and sit on top of the header icons, hiding the avatar menu on pages with a load error (e.g. Files).</td><td class="ev">"Failed to load documents" persisted &gt; 2 min</td></tr>
+
+<tr class="section"><td colspan="4">Home <span>/</span></td></tr>
+<tr><td class="ctl">Page load</td><td><span class="chip warn">Partial</span></td><td>Blank for ~3 s before first paint (waits on the failing <code>/api/stats</code>); then renders correctly.</td><td class="ev">GET /api/stats <span class="st">503 ×2</span></td></tr>
+<tr><td class="ctl">Your Knowledge Bases tiles</td><td><span class="chip ok">Works</span></td><td>Counts and KB cards reflect live <code>/api/jobs</code>; card links to the KB detail.</td><td class="ev">GET /api/jobs <span class="st">200</span></td></tr>
+<tr><td class="ctl">New / Create Knowledge Base</td><td><span class="chip ok">Works</span></td><td>Links to <code>/jobs</code>.</td><td class="ev">—</td></tr>
+<tr><td class="ctl">Public Demo card</td><td><span class="chip bad">Broken</span></td><td>Shows "0 papers" because stats fail; header switcher simultaneously says 85 docs.</td><td class="ev">GET /api/stats <span class="st">503</span></td></tr>
+<tr><td class="ctl">Chat with Demo / Browse Papers</td><td><span class="chip ok">Works</span></td><td>Navigate to <code>/chats</code> and <code>/datasets</code>.</td><td class="ev">—</td></tr>
+
+<tr class="section"><td colspan="4">Knowledge Bases <span>/jobs</span></td></tr>
+<tr><td class="ctl">Page header</td><td><span class="chip warn">Partial</span></td><td>"Knowledge Bases" title is partially hidden under the fixed navbar on first load; the drawer link for this page points at <code>/jobs</code>, an internal name that leaks into the URL.</td><td class="ev">—</td></tr>
+<tr><td class="ctl">New Knowledge Base → Create</td><td><span class="chip ok">Works</span></td><td>Modal validates the required name, creates the KB, list refreshes immediately.</td><td class="ev">POST /api/jobs <span class="st">200</span> → id 22</td></tr>
+<tr><td class="ctl">Search knowledge bases</td><td><span class="chip ok">Works</span></td><td>Client-side filter with a proper empty state.</td><td class="ev">—</td></tr>
+<tr><td class="ctl">Card ⋮ → Delete</td><td><span class="chip ok">Works</span></td><td>Confirm dialog states doc/chunk counts; KB removed and list refreshed.</td><td class="ev">GET /api/jobs → <span class="st">{"total":0}</span></td></tr>
+
+<tr class="section"><td colspan="4">Knowledge base detail <span>/jobs/:id</span></td></tr>
+<tr><td class="ctl">Direct load / refresh</td><td><span class="chip bad">Broken</span></td><td>White screen (relative asset path). Only reachable via in-app navigation.</td><td class="ev">GET /jobs/assets/index-….js → <span class="st">text/html</span></td></tr>
+<tr><td class="ctl">Stats tiles, document list, search</td><td><span class="chip ok">Works</span></td><td>Documents / Chunks / Topics from live endpoints; empty state correct.</td><td class="ev">/api/jobs/22, /documents, /stats <span class="st">200</span></td></tr>
+<tr><td class="ctl">Upload PDF (both buttons)</td><td><span class="chip bad">Broken</span></td><td>Dialog (phase, topic, multi-file) works; submit fails per file with "Invalid or expired token".</td><td class="ev">POST /api/jobs/22/upload/async <span class="st">401</span></td></tr>
+<tr><td class="ctl">Query Knowledge Base → Ask</td><td><span class="chip ok">Works</span></td><td>Side panel opens; on an empty KB returns "No documents in this knowledge base yet".</td><td class="ev">GET /api/jobs/22/query <span class="st">200</span></td></tr>
+<tr><td class="ctl">Clear knowledge base</td><td><span class="chip ok">Works</span></td><td>Confirm dialog, then clears. (First attempt hit the expired-token state and showed "Knowledge base not found".)</td><td class="ev">POST /api/jobs/22/clear <span class="st">200</span> / earlier <span class="st">401</span></td></tr>
+<tr><td class="ctl">Team → role select + Generate invite link</td><td><span class="chip ok">Works</span></td><td>Creates a 14-day link with Copy button; members list shows the real owner.</td><td class="ev">POST /api/jobs/22/invites <span class="st">200</span></td></tr>
+<tr><td class="ctl">Invite link itself <code>/join/:token</code></td><td><span class="chip bad">Broken</span></td><td>Opening the generated link renders a white page; no accept-invite API call is made. Sharing is effectively non-functional.</td><td class="ev">root innerHTML length <span class="st">0</span></td></tr>
+
+<tr class="section"><td colspan="4">Knowledge Insights <span>/insights</span></td></tr>
+<tr><td class="ctl">With Public Demo selected</td><td><span class="chip ok">Works</span></td><td>Clear message asking to pick a non-demo KB (by design).</td><td class="ev">—</td></tr>
+<tr><td class="ctl">With own KB → Run analysis</td><td><span class="chip warn">Partial</span></td><td>Loads and posts successfully, but there is no feedback at all after clicking (no toast, no "no documents to analyse").</td><td class="ev">POST /api/jobs/22/insights/run <span class="st">200</span></td></tr>
+
+<tr class="section"><td colspan="4">Knowledge Graph <span>/graph</span></td></tr>
+<tr><td class="ctl">Build graph (both buttons), Open insights</td><td><span class="chip warn">Partial</span></td><td>Same as Insights: API succeeds, UI gives no feedback on an empty KB. Open insights navigates correctly.</td><td class="ev">POST /api/jobs/22/graph/build <span class="st">200</span></td></tr>
+
+<tr class="section"><td colspan="4">Files <span>/files</span></td></tr>
+<tr><td class="ctl">Document table</td><td><span class="chip bad">Broken</span></td><td>"Failed to load documents"; table empty, pagination shows Total 0.</td><td class="ev">GET /api/documents?limit=500 <span class="st">503</span></td></tr>
+<tr><td class="ctl">Upload / Upload your first PDF</td><td><span class="chip stub">Stub</span></td><td>Opens the native file picker only; no dialog for phase/topic as on the KB page. Not testable further while the collection is down.</td><td class="ev">GET /api/upload/config <span class="st">200</span></td></tr>
+
+<tr class="section"><td colspan="4">Dataset <span>/datasets</span></td></tr>
+<tr><td class="ctl">Paper list / search</td><td><span class="chip bad">Broken</span></td><td>"Failed to load papers — Internal server error".</td><td class="ev">GET /api/papers <span class="st">503</span></td></tr>
+
+<tr class="section"><td colspan="4">Chat <span>/chats</span></td></tr>
+<tr><td class="ctl">Deep Analysis toggle, format menu (Paragraph / Bullet Points / Structured)</td><td><span class="chip ok">Works</span></td><td>Toggle state and format are passed as query params.</td><td class="ev">…&amp;deep_analysis=true</td></tr>
+<tr><td class="ctl">Send question</td><td><span class="chip bad">Broken</span></td><td>Bubble renders, answer is "Error: Internal server error".</td><td class="ev">GET /api/chat?question=… <span class="st">503</span></td></tr>
+
+<tr class="section"><td colspan="4">Search <span>/searches</span></td></tr>
+<tr><td class="ctl">Search the literature</td><td><span class="chip bad">Broken</span></td><td>"Search failed: Internal server error".</td><td class="ev">GET /api/search?query=… <span class="st">503</span></td></tr>
+
+<tr class="section"><td colspan="4">Agents <span>/agents</span></td></tr>
+<tr><td class="ctl">Create agent</td><td><span class="chip stub">Stub</span></td><td>Toast "Agent creation coming soon". Filter, search and pagination render but have nothing to act on; no API exists (<code>/api/agents</code> 404).</td><td class="ev">no request</td></tr>
+
+<tr class="section"><td colspan="4">Settings · Data sources <span>/settings/data-sources</span></td></tr>
+<tr><td class="ctl">Save (Google Drive, OneDrive, Notion, GitHub, Confluence)</td><td><span class="chip warn">Partial</span></td><td>Persists to the backend — but saving with every field empty marks the source "Configured". No validation.</td><td class="ev">POST /api/settings/data-sources/google_drive <span class="st">200</span></td></tr>
+<tr><td class="ctl">Clear</td><td><span class="chip ok">Works</span></td><td>Deletes the connection and resets the badge.</td><td class="ev">DELETE …/google_drive <span class="st">200</span></td></tr>
+<tr><td class="ctl">Connect (Google Drive only)</td><td><span class="chip bad">Broken</span></td><td>"Failed to start Google Drive OAuth". Only Google Drive has a Connect button at all; OneDrive and GitHub have OAuth fields but no Connect.</td><td class="ev">GET …/google_drive/auth-url <span class="st">400</span></td></tr>
+<tr><td class="ctl">Settings sidebar identity</td><td><span class="chip stub">Stub</span></td><td>Sidebar and breadcrumb show a hardcoded <code>shaunkudzi@gmail.com</code> and "Profile" on every settings page; the logged-in account is <code>shaun.kutsanzira@staycoldapparel.com</code>.</td><td class="ev">GET /api/auth/me <span class="st">200</span></td></tr>
+
+<tr class="section"><td colspan="4">Settings · Model providers <span>/settings/model-providers</span></td></tr>
+<tr><td class="ctl">Default model selects (LLM, Embedding, VLM, ASR, Rerank, TTS)</td><td><span class="chip stub">Stub</span></td><td>Hardcoded options (GPT-4, GPT-3.5, Claude); selection is not saved; no API call on the whole page.</td><td class="ev">no request</td></tr>
+<tr><td class="ctl">Provider cards (OpenAI, Anthropic, Gemini, Moonshot), filter chips, search</td><td><span class="chip stub">Stub</span></td><td>Clicking a card does nothing; no add-key flow.</td><td class="ev">no request</td></tr>
+<tr><td class="ctl">Added models (BAAI, DeepSeek) → Share / API-Key / View models / delete</td><td><span class="chip stub">Stub</span></td><td>Mock rows; none of the four buttons respond.</td><td class="ev">no request</td></tr>
+
+<tr class="section"><td colspan="4">Settings · MCP <span>/settings/mcp</span></td></tr>
+<tr><td class="ctl">Bulk manage / Import / Add MCP</td><td><span class="chip stub">Stub</span></td><td>No modal, no request. Empty list is static.</td><td class="ev">no request</td></tr>
+
+<tr class="section"><td colspan="4">Settings · Team <span>/settings/team</span></td></tr>
+<tr><td class="ctl">Invite member, Actions, sort headers, search</td><td><span class="chip stub">Stub</span></td><td>All inert. "Joined teams" row is mock data (25/01/2026, gmail address) — no API call.</td><td class="ev">no request</td></tr>
+
+<tr class="section"><td colspan="4">Settings · Profile <span>/settings/profile</span></td></tr>
+<tr><td class="ctl">Edit name / time zone / password</td><td><span class="chip stub">Stub</span></td><td>Toast "Profile editing coming soon". Displayed values are mock (Asia/Shanghai, gmail) not the account's.</td><td class="ev">no request</td></tr>
+<tr><td class="ctl">Log out</td><td><span class="chip stub">Not tested</span></td><td>Skipped deliberately — re-authentication would require entering credentials.</td><td class="ev">—</td></tr>
+
+<tr class="section"><td colspan="4">Footer &amp; misc</td></tr>
+<tr><td class="ctl">Privacy · Impressum · DPA</td><td><span class="chip bad">Broken</span></td><td>All three render a white page (relative asset path on a two-segment route).</td><td class="ev">/legal/* → root empty</td></tr>
+<tr><td class="ctl">Trust</td><td><span class="chip ok">Works</span></td><td>Static page renders fully.</td><td class="ev">—</td></tr>
+<tr><td class="ctl">Unknown route</td><td><span class="chip ok">Works</span></td><td>Proper 404 page with Go Home / Open Knowledge Bases.</td><td class="ev">/does-not-exist</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>What is configured right now</h2>
+<div class="cfg">
+  <div class="box"><h3>Backend endpoints</h3><ul>
+    <li>/api/auth/me, /auth/refresh <span class="chip ok">200</span></li>
+    <li>/api/jobs (list/create/get/delete) <span class="chip ok">200</span></li>
+    <li>/api/jobs/:id/query · clear · invites · members · insights · graph <span class="chip ok">200</span></li>
+    <li>/api/jobs/:id/upload/async <span class="chip bad">401</span></li>
+    <li>/api/stats · papers · documents · search · chat <span class="chip bad">503</span></li>
+    <li>/api/settings/data-sources <span class="chip ok">200</span></li>
+    <li>/api/health · collections · datasets · agents <span class="chip stub">404</span></li>
+  </ul></div>
+  <div class="box"><h3>Integrations</h3><ul>
+    <li>Google Drive <span class="chip stub">Not configured</span></li>
+    <li>OneDrive / SharePoint <span class="chip stub">Not configured</span></li>
+    <li>Notion <span class="chip stub">Not configured</span></li>
+    <li>GitHub <span class="chip stub">Not configured</span></li>
+    <li>Confluence <span class="chip stub">Not configured</span></li>
+    <li>MCP servers <span class="chip stub">None</span></li>
+    <li>Model providers / default models <span class="chip stub">UI only</span></li>
+  </ul></div>
+  <div class="box"><h3>Upload &amp; account</h3><ul>
+    <li>Upload enabled, S3-only <span class="chip ok">true</span></li>
+    <li>Max file size <span>50 MB</span></li>
+    <li>Allowed extensions <span>.pdf</span></li>
+    <li>Phases <span>4 predefined</span></li>
+    <li>Account verified <span class="chip warn">false</span></li>
+    <li>OAuth provider <span>local</span></li>
+    <li>Own knowledge bases after cleanup <span>0</span></li>
+  </ul></div>
+</div>
+
+<h2>Suggested order of work</h2>
+<div class="note">
+  Fixing the four root causes turns all 10 broken checks into working ones without touching the stubbed settings pages.
+  <ol>
+    <li>Absolute asset paths in the build (unblocks deep links, invite links, legal pages, refresh on any KB).</li>
+    <li>Restore the demo collection's backend dependency behind <code>/api/stats</code>, <code>/papers</code>, <code>/search</code>, <code>/chat</code>, <code>/documents</code>; add <code>/api/health</code>.</li>
+    <li>Remove the <code>Bearer __cookie_session__</code> header from the upload client.</li>
+    <li>401 → refresh → retry interceptor; auto-dismissing toasts that don't cover the header.</li>
+    <li>Then decide per settings page (Model providers, MCP, Team, Profile, Agents) whether to wire or hide — today they present mock data as if it were the user's.</li>
+  </ol>
+</div>
+
+<p class="method">Method: every route was opened both by in-app navigation and by direct URL; every button, menu item, toggle, form and modal was clicked; network requests and console output were recorded per action; the upload was tested with a real 1.6 KB PDF; expired-session behaviour was observed naturally after ~60 minutes. Test data (knowledge base "AUDIT-TEST KB", id 22, and an empty Google Drive connection) was created and removed again; the account is back in its original state with the Public Demo Collection selected and language set to English. Log-out was the only control not exercised.</p>
+</div>
