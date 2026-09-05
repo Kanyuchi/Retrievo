@@ -147,3 +147,10 @@
 - Graph build failed three ways, each a real bug now fixed+tested: (1) nginx 60s proxy timeout on long builds → /api proxy_read_timeout 300s; (2) direct-to-uvicorn call hit our own REQUIRE_HTTPS 308 → X-Forwarded-Proto header (as nginx sends); (3) Postgres FK violation: graph rebuild cleared knowledge_entities before occurrences/edges referencing them — latent SQLite-masked bug, deletion order fixed + regression test (78 tests)
 - Final build: 200 claims (route's claim_limit default) → 328 entities, 337 edges; long-term: move insights/graph builds onto the rq queue like uploads (roadmap note)
 - Thesis KB complete: 56 papers, ~5,900 chunks, insights, gaps, interactive graph; editor invite live for Shaun
+
+## 2026-09-04 — 16 Personalities showcase KB live
+- Second demo corpus per Shaun: Bundle = old personality-RAG project (16 types x Relationships/Career/Growth, 48 PDFs)
+- Mapping: phase=personality type, topic=life aspect → dual-dimension filtering in UI
+- 48/48 indexed (one JWT-expiry retry); insights 334 claims / 326 gaps; graph 298 entities / 367 edges / 7 clusters
+- Cross-type chat verified: "How do Commanders and Mediators differ in workplace conflict?" → grounded comparative answer, 6 cited sources (grok-4.20)
+- demo@humbowo.com bumped to enterprise tier (54 docs total across demo KBs)

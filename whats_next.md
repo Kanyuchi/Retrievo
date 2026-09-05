@@ -27,6 +27,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-04: 16 Personalities showcase KB (48 docs, graph 298 entities/7 clusters, cross-type cited chat verified)
 - 2026-09-03: Thesis corpus (56 papers) live in "Thesis Literature — Regional Transitions" KB; real eval baseline recall@5 0.50 / MRR 0.50; insights+graph built; invite minted
 - 2026-09-02: Phase 5 round 2 — semantic eval harness (recall 1.0/MRR 1.0 baseline on demo corpus), json-fence parse fix unlocking knowledge graph (0→139 entities), graph UI polish shipped
 - 2026-09-02: Phase 5 round 1 — latent hybrid-ranking bug fixed (RRF preserved through trim); "truncation" root-caused as test-PDF artifact, grounded-citation chat verified with real figure; Humbowo brand sweep; −40% main bundle (cytoscape code-split)
