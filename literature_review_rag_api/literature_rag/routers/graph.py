@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from ..auth import get_current_user
 from ..config import load_config
 from ..database import (
-    get_db, JobCRUD, KnowledgeClaimCRUD,
+    get_db, JobCRUD,
     KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
-    KnowledgeEntityOccurrenceCRUD, KnowledgeClusterCRUD
+    KnowledgeClusterCRUD
 )
 from ..membership import require_job_role
 from ..models import KnowledgeGraphResponse, KnowledgeGraphRunResponse, KnowledgeGraphClusterResponse
@@ -223,139 +223,45 @@ async def build_knowledge_graph(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     require_job_role(db, job, current_user.id, "editor")
 
-    claims = KnowledgeClaimCRUD.list_for_job(db, job_id, limit=claim_limit)
-    # FK-safe order: occurrences and edges reference entities, so they must
-    # be deleted first (Postgres enforces this; SQLite silently didn't).
-    KnowledgeEntityOccurrenceCRUD.delete_for_job(db, job_id)
-    KnowledgeEdgeCRUD.delete_for_job(db, job_id)
-    KnowledgeEntityCRUD.delete_for_job(db, job_id)
-    KnowledgeClusterCRUD.delete_for_job(db, job_id)
+    from ..knowledge_tasks import run_graph_build_for_job
+    return run_graph_build_for_job(job_id, claim_limit)
 
-    raw_entities: List[Dict[str, Any]] = []
-    raw_relations: List[Dict[str, Any]] = []
 
-    for claim in claims:
-        extracted = _extract_entities_relations(claim.claim_text)
-        for ent in extracted.get("entities", [])[:10]:
-            name = str(ent.get("name", "")).strip()
-            if not name:
-                continue
-            entity_type = str(ent.get("type", "concept")).strip()
-            raw_entities.append({
-                "name": name,
-                "type": entity_type,
-                "doc_id": claim.doc_id,
-                "claim_id": claim.id,
-                "paragraph_index": claim.paragraph_index
-            })
+@router.post("/{job_id}/graph/build/async")
+async def build_knowledge_graph_async(
+    job_id: int,
+    claim_limit: int = Query(400, ge=1, le=1000),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enqueue a knowledge-graph build for background processing.
 
-        for rel in extracted.get("relations", [])[:10]:
-            source = str(rel.get("source", "")).strip()
-            target = str(rel.get("target", "")).strip()
-            relation_type = str(rel.get("relation", "related_to")).strip()
-            if not source or not target:
-                continue
-            raw_relations.append({"source": source, "target": target, "relation": relation_type})
+    Returns a task_id; poll GET /api/upload/{task_id}/status. Falls back to
+    inline processing when the queue is unavailable.
+    """
+    import uuid as _uuid
 
-    refined = _refine_graph(raw_entities, raw_relations)
-    entity_map: Dict[str, Any] = {}
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "editor")
 
-    for ent in refined.get("entities", [])[:400]:
-        name = str(ent.get("name", "")).strip()
-        if not name:
-            continue
-        entity_type = str(ent.get("type", "concept")).strip()
-        cluster = str(ent.get("cluster", "")).strip() or None
-        entity = KnowledgeEntityCRUD.get_or_create(db, job_id, name, entity_type, cluster)
-        entity_map[name] = entity
+    from ..database import UploadTaskCRUD
+    from ..knowledge_tasks import process_graph_build
 
-    for ent in raw_entities:
-        name = str(ent.get("name", "")).strip()
-        if not name or name not in entity_map:
-            continue
-        KnowledgeEntityOccurrenceCRUD.create(
-            db=db,
-            job_id=job_id,
-            entity_id=entity_map[name].id,
-            doc_id=str(ent.get("doc_id", "")),
-            claim_id=ent.get("claim_id"),
-            paragraph_index=ent.get("paragraph_index")
-        )
+    task_id = _uuid.uuid4().hex[:16]
+    UploadTaskCRUD.create(db, task_id=task_id, filename="graph-build",
+                          phase="-", topic="-", status="queued")
 
-    for rel in refined.get("relations", [])[:800]:
-        source = str(rel.get("source", "")).strip()
-        target = str(rel.get("target", "")).strip()
-        relation_type = str(rel.get("relation", "related_to")).strip()
-        if not source or not target:
-            continue
-        if source not in entity_map or target not in entity_map:
-            continue
-        KnowledgeEdgeCRUD.create(
-            db=db,
-            job_id=job_id,
-            source_entity_id=entity_map[source].id,
-            target_entity_id=entity_map[target].id,
-            relation_type=relation_type,
-            weight=1.0
-        )
+    try:
+        from ..worker import WorkerManager
+        WorkerManager(backend="auto").enqueue(
+            process_graph_build, task_id, job.id, claim_limit, job_id=task_id)
+    except Exception as e:
+        logger.warning(f"Queue unavailable ({e}); processing graph build inline")
+        process_graph_build(task_id, job.id, claim_limit)
 
-    graph_cfg = getattr(config, "graph", None)
-    if getattr(graph_cfg, "cluster_summaries_enabled", True):
-        # Build cluster summaries (connected components)
-        entities = KnowledgeEntityCRUD.list_for_job(db, job_id, limit=1000)
-        edges = KnowledgeEdgeCRUD.list_for_job(db, job_id, limit=2000)
-        adjacency = {e.id: set() for e in entities}
-        for edge in edges:
-            adjacency.setdefault(edge.source_entity_id, set()).add(edge.target_entity_id)
-            adjacency.setdefault(edge.target_entity_id, set()).add(edge.source_entity_id)
-
-        visited = set()
-        clusters = []
-        for entity in entities:
-            if entity.id in visited:
-                continue
-            stack = [entity.id]
-            component = []
-            while stack:
-                node_id = stack.pop()
-                if node_id in visited:
-                    continue
-                visited.add(node_id)
-                component.append(node_id)
-                for neighbor in adjacency.get(node_id, []):
-                    if neighbor not in visited:
-                        stack.append(neighbor)
-            if component:
-                clusters.append(component)
-
-        for idx, component in enumerate(clusters, start=1):
-            cluster_id = f"cluster_{idx}"
-            cluster_entities = [e for e in entities if e.id in component]
-            entity_names = [e.name for e in cluster_entities]
-            relation_names = [
-                edge.relation_type
-                for edge in edges
-                if edge.source_entity_id in component or edge.target_entity_id in component
-            ]
-            summary = _summarize_cluster(entity_names, relation_names)
-            KnowledgeClusterCRUD.upsert(
-                db=db,
-                job_id=job_id,
-                cluster_id=cluster_id,
-                name=entity_names[0] if entity_names else cluster_id,
-                summary=summary,
-                node_count=len(component)
-            )
-            for e in cluster_entities:
-                if not e.cluster:
-                    e.cluster = cluster_id
-            db.commit()
-
-    return {
-        "claims_processed": len(claims),
-        "entities_created": KnowledgeEntityCRUD.count_for_job(db, job_id),
-        "edges_created": KnowledgeEdgeCRUD.count_for_job(db, job_id)
-    }
+    return {"task_id": task_id, "status_url": f"/api/upload/{task_id}/status"}
 
 
 @router.get("/{job_id}/graph", response_model=KnowledgeGraphResponse)

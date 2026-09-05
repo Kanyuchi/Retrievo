@@ -12,11 +12,10 @@ from sqlalchemy.orm import Session
 from ..auth import get_current_user
 from ..config import load_config
 from ..database import (
-    get_db, JobCRUD, DocumentCRUD,
+    get_db, JobCRUD,
     KnowledgeClaimCRUD, KnowledgeGapCRUD,
     KnowledgeEntityOccurrenceCRUD, KnowledgeEntityCRUD, KnowledgeClusterCRUD
 )
-from ..embeddings import get_embeddings
 from ..membership import require_job_role
 from ..models import KnowledgeInsightsResponse, KnowledgeInsightsRunResponse
 
@@ -155,105 +154,45 @@ async def run_knowledge_insights(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     require_job_role(db, job, current_user.id, "editor")
 
-    documents = DocumentCRUD.get_job_documents(db, job_id)[:doc_limit]
-    collection = _get_job_collection(job)
-    embeddings = get_embeddings(config.embedding)
+    from ..knowledge_tasks import run_insights_for_job
+    return run_insights_for_job(job_id, doc_limit)
 
-    insights_config = getattr(config, "insights", None)
-    max_chars = getattr(insights_config, "max_doc_chars", 12000)
-    max_paragraphs = getattr(insights_config, "max_paragraphs", 12)
-    max_claims_per_doc = getattr(insights_config, "max_claims_per_doc", 8)
-    missing_threshold = getattr(insights_config, "missing_threshold", 0.25)
-    weak_threshold = getattr(insights_config, "weak_threshold", 0.35)
-    min_evidence = getattr(insights_config, "min_evidence", 2)
 
-    # Clear existing
-    KnowledgeGapCRUD.delete_for_job(db, job_id)
-    KnowledgeClaimCRUD.delete_for_job(db, job_id)
+@router.post("/{job_id}/insights/run/async")
+async def run_knowledge_insights_async(
+    job_id: int,
+    doc_limit: int = Query(50, ge=1, le=500),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enqueue a knowledge-insights build for background processing.
 
-    claims_extracted = 0
-    gaps_detected = 0
+    Returns a task_id; poll GET /api/upload/{task_id}/status. Falls back to
+    inline processing when the queue is unavailable.
+    """
+    import uuid as _uuid
 
-    for doc in documents:
-        paragraphs = _build_doc_text(collection, doc.doc_id, max_chars, max_paragraphs)
-        if not paragraphs:
-            continue
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id, "editor")
 
-        claims = _extract_claims_from_paragraphs(paragraphs)
-        if not claims:
-            continue
+    from ..database import UploadTaskCRUD
+    from ..knowledge_tasks import process_insights_build
 
-        for claim in claims[:max_claims_per_doc]:
-            claim_record = KnowledgeClaimCRUD.create(
-                db=db,
-                job_id=job_id,
-                doc_id=doc.doc_id,
-                claim_text=claim["claim_text"],
-                paragraph_index=claim.get("paragraph_index")
-            )
-            claims_extracted += 1
+    task_id = _uuid.uuid4().hex[:16]
+    UploadTaskCRUD.create(db, task_id=task_id, filename="insights-build",
+                          phase="-", topic="-", status="queued")
 
-            # Evidence check via vector search
-            try:
-                query_vec = embeddings.embed_query(claim["claim_text"])
-                result = collection.query(
-                    query_embeddings=[query_vec],
-                    n_results=5,
-                    include=["distances", "documents", "metadatas"]
-                )
-                distances = result.get("distances", [[]])[0] or []
-                documents = result.get("documents", [[]])[0] or []
-                metadatas = result.get("metadatas", [[]])[0] or []
-                if distances:
-                    best_score = max(0.0, 1.0 - float(distances[0]))
-                    evidence_count = sum(1 for d in distances if (1.0 - float(d)) >= weak_threshold)
-                else:
-                    best_score = 0.0
-                    evidence_count = 0
-            except Exception:
-                best_score = 0.0
-                evidence_count = 0
-                documents = []
-                metadatas = []
+    try:
+        from ..worker import WorkerManager
+        WorkerManager(backend="auto").enqueue(
+            process_insights_build, task_id, job.id, doc_limit, job_id=task_id)
+    except Exception as e:
+        logger.warning(f"Queue unavailable ({e}); processing insights build inline")
+        process_insights_build(task_id, job.id, doc_limit)
 
-            evidence_snippets = []
-            for doc_text, meta, dist in zip(documents[:2], metadatas[:2], distances[:2]):
-                score = max(0.0, 1.0 - float(dist)) if dist is not None else 0.0
-                evidence_snippets.append({
-                    "doc_id": meta.get("doc_id") if meta else None,
-                    "title": meta.get("title") if meta else None,
-                    "score": score,
-                    "snippet": (doc_text or "")[:300]
-                })
-
-            if best_score < missing_threshold:
-                KnowledgeGapCRUD.create(
-                    db=db,
-                    job_id=job_id,
-                    claim_id=claim_record.id,
-                    gap_type="missing_evidence",
-                    best_score=best_score,
-                    evidence_count=evidence_count,
-                    evidence_json=json.dumps(evidence_snippets)
-                )
-                gaps_detected += 1
-            elif evidence_count < min_evidence:
-                KnowledgeGapCRUD.create(
-                    db=db,
-                    job_id=job_id,
-                    claim_id=claim_record.id,
-                    gap_type="weak_coverage",
-                    best_score=best_score,
-                    evidence_count=evidence_count,
-                    evidence_json=json.dumps(evidence_snippets)
-                )
-                gaps_detected += 1
-
-    return {
-        "documents_processed": len(documents),
-        "claims_extracted": claims_extracted,
-        "gaps_detected": gaps_detected
-    }
+    return {"task_id": task_id, "status_url": f"/api/upload/{task_id}/status"}
 
 
 @router.get("/{job_id}/insights", response_model=KnowledgeInsightsResponse)
