@@ -88,7 +88,7 @@ def run_insights_for_job(job_id: int, doc_limit: int) -> Dict[str, Any]:
                         include=["distances", "documents", "metadatas"]
                     )
                     distances = result.get("distances", [[]])[0] or []
-                    documents = result.get("documents", [[]])[0] or []
+                    evidence_docs = result.get("documents", [[]])[0] or []
                     metadatas = result.get("metadatas", [[]])[0] or []
                     if distances:
                         best_score = max(0.0, 1.0 - float(distances[0]))
@@ -99,11 +99,11 @@ def run_insights_for_job(job_id: int, doc_limit: int) -> Dict[str, Any]:
                 except Exception:
                     best_score = 0.0
                     evidence_count = 0
-                    documents = []
+                    evidence_docs = []
                     metadatas = []
 
                 evidence_snippets = []
-                for doc_text, meta, dist in zip(documents[:2], metadatas[:2], distances[:2]):
+                for doc_text, meta, dist in zip(evidence_docs[:2], metadatas[:2], distances[:2]):
                     score = max(0.0, 1.0 - float(dist)) if dist is not None else 0.0
                     evidence_snippets.append({
                         "doc_id": meta.get("doc_id") if meta else None,
