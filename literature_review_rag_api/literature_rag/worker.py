@@ -229,6 +229,9 @@ class RedisWorker(WorkerBackend):
             func,
             *args,
             job_id=job_id,
+            # OCR of large scanned PDFs and full-corpus graph builds run far
+            # beyond rq's 180s default.
+            job_timeout=int(os.getenv("RQ_JOB_TIMEOUT", "7200")),
             **kwargs
         )
 

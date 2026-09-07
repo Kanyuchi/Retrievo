@@ -490,6 +490,14 @@ def require_auth_if_configured(user=Depends(get_current_user_optional)):
     return user
 
 
+def legacy_collection_available() -> bool:
+    """True when the legacy default collection can serve requests."""
+    try:
+        return rag_system is not None and rag_system.is_ready()
+    except Exception:
+        return False
+
+
 def check_rag_ready():
     """Check if RAG system is ready to serve requests."""
     if rag_system is None:
@@ -566,8 +574,11 @@ async def get_stats():
     Get collection statistics for the webapp dashboard.
 
     Returns total papers, chunks, phases, topics, and year range.
+    Degrades to zeros while the demo collection is unavailable.
     """
-    check_rag_ready()
+    if not legacy_collection_available():
+        return {"total_papers": 0, "total_chunks": 0, "phases": {},
+                "topics": {}, "year_range": {"min": 0, "max": 0}}
 
     try:
         stats = rag_system.get_stats()
@@ -625,7 +636,8 @@ async def api_list_papers(
     """
     List papers for the webapp (simplified format).
     """
-    check_rag_ready()
+    if not legacy_collection_available():
+        return {"total": 0, "papers": []}
 
     try:
         all_data = rag_system.collection.get(include=["metadatas"])
@@ -676,7 +688,9 @@ async def api_semantic_search(
     """
     Semantic search endpoint for the webapp.
     """
-    check_rag_ready()
+    if not legacy_collection_available():
+        return {"query": query, "total": 0, "results": [],
+                "message": "The public demo collection is being rebuilt."}
     start_time = time.time()
 
     try:
@@ -828,7 +842,18 @@ async def api_chat_with_llm(
     - complexity: Query complexity classification
     - pipeline_stats: Execution statistics (LLM calls, time, validation status)
     """
-    check_rag_ready()
+    if not legacy_collection_available():
+        return {
+            "question": question,
+            "answer": "The public demo collection is currently being rebuilt. "
+                      "Create your own knowledge base to chat with your documents.",
+            "sources": [], "complexity": "simple",
+            "pipeline_stats": {"llm_calls": 0, "retrieval_attempts": 0,
+                                "validation_passed": None, "total_time_ms": 0,
+                                "evaluation_scores": None,
+                                "retries": {"retrieval": 0, "generation": 0}},
+            "model": "n/a", "filters_applied": {},
+        }
 
     if groq_client is None:
         raise HTTPException(
@@ -1107,6 +1132,12 @@ async def health_check(current_user: Optional[User] = Depends(get_current_user_o
 @app.get("/healthz")
 async def healthz():
     """Lightweight health check for container liveness."""
+    return {"status": "ok"}
+
+
+@app.get("/api/health")
+async def api_health():
+    """Health alias for external monitoring (audit request)."""
     return {"status": "ok"}
 
 
@@ -1746,7 +1777,8 @@ async def list_documents(
 
     Returns document metadata for all papers in the knowledge base.
     """
-    check_rag_ready()
+    if not legacy_collection_available():
+        return {"total": 0, "documents": []}
 
     try:
         # Prefer normalized document records from DB
