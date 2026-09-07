@@ -11,6 +11,9 @@
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
+- Point the public demo experience at a demo workspace (retire legacy global collection properly) — audit RC2's real fix
+- Audit leftovers: drawer clipping/Escape, DialogTitle a11y warning, Google Drive OAuth 400, data-source save validation
+- Re-enable (wired) or delete stubbed pages: Model Providers, MCP, Team, Agents
 - Consider Claude Haiku 4.5 / Sonnet 5 for chat synthesis (best citation faithfulness; Groq free tier is the launch default)
 - Hetzner firewall via API (allow 22/80/443 only)
 - Server backups: Hetzner auto-backup (~20% of server cost) or snapshot cadence

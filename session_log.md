@@ -154,3 +154,13 @@
 - 48/48 indexed (one JWT-expiry retry); insights 334 claims / 326 gaps; graph 298 entities / 367 edges / 7 clusters
 - Cross-type chat verified: "How do Commanders and Mediators differ in workplace conflict?" → grounded comparative answer, 6 cited sources (grok-4.20)
 - demo@humbowo.com bumped to enterprise tier (54 docs total across demo KBs)
+
+## 2026-09-05→07 — Independent audit response: all four root causes fixed
+- Shaun delivered a professional functional audit (docs/audits/2026-09-05-functional-audit.html): 17 working / 10 broken / 13 stubs / 8 partial, 4 root causes
+- RC1 relative asset paths (vite base './'): → '/' — deep links, /legal/*, and INVITE LINKS now render (browser-verified: /legal/privacy cold-load + /join/:token → login redirect with preserved return path)
+- RC3 upload sent literal 'Bearer __cookie_session__': uploadToJob bypassed resolveBearerToken — fixed; sentinel never leaves the client
+- RC4 no 401 recovery: interceptor existed but 8 raw-fetch methods bypassed it (incl. the audit's exact /clear repro) — new rawFetch helper with shared-refresh retry; XHR upload too; boot-time 401 noise silenced
+- RC2 demo-collection 503s: legacy global RAG has no index on this server → graceful degradation (stats/papers/documents 200-empty, chat friendly message, /api/health added); REAL fix (public demo = workspace) → roadmap
+- Stub cleanup: dead Discord/GitHub/Help/theme buttons removed; hardcoded shaunkudzi@gmail.com mock identity replaced with real auth data; Model Providers/MCP/Team/Agents hidden as stubs; KB switcher staleness fixed; toasts auto-dismiss bottom-right
+- OCR saga continued: deps+flag were fine — rq's 180s default job timeout killed mid-OCR (500-page scans) → RQ_JOB_TIMEOUT 7200; scans attempt 4 + full-claims thesis graph rebuild running
+- 84 tests green; audit archived in repo
