@@ -647,15 +647,18 @@ async def update_job_member_role(
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(
     job_id: int,
-    ctx: TenantContext = Depends(get_tenant_context)
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
 ):
     """
     Get a specific job by ID.
 
-    Automatically verifies ownership - users can only access their own jobs.
+    Owners, members, and (for public workspaces) anonymous viewers.
     """
-    # Verify ownership using isolation module
-    job = verify_job_access(job_id, ctx)
+    job = JobCRUD.get_by_id(db, job_id)
+    if not job or job.status == JobStatus.DELETED.value:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
     return job_to_response(job)
 
 
