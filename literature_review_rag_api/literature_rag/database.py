@@ -129,6 +129,9 @@ class Job(Base):
     # Status
     status = Column(String(50), default=JobStatus.ACTIVE.value)
 
+    # Public workspaces: anonymous/unrelated users get implicit "viewer" access
+    is_public = Column(Boolean, default=False)
+
     # Statistics (cached for performance)
     document_count = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
@@ -643,6 +646,11 @@ def _run_migrations():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE jobs ADD COLUMN extractor_type VARCHAR(50) DEFAULT 'auto'"))
             logger.info("Migration complete: extractor_type added")
+        if "is_public" not in columns:
+            logger.info("Migrating: adding is_public column to jobs table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN is_public BOOLEAN DEFAULT FALSE"))
+            logger.info("Migration complete: is_public added")
 
     if inspector.has_table("default_documents"):
         columns = [col["name"] for col in inspector.get_columns("default_documents")]
@@ -753,6 +761,14 @@ class JobCRUD:
     def get_user_jobs(db: Session, user_id: int, include_archived: bool = False) -> List[Job]:
         """Get all jobs for a user."""
         query = db.query(Job).filter(Job.user_id == user_id)
+        if not include_archived:
+            query = query.filter(Job.status == JobStatus.ACTIVE.value)
+        return query.order_by(Job.created_at.desc()).all()
+
+    @staticmethod
+    def get_public_jobs(db: Session, include_archived: bool = False) -> List[Job]:
+        """Get all jobs marked is_public=True (anonymous/public read access)."""
+        query = db.query(Job).filter(Job.is_public.is_(True))
         if not include_archived:
             query = query.filter(Job.status == JobStatus.ACTIVE.value)
         return query.order_by(Job.created_at.desc()).all()

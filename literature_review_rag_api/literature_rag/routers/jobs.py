@@ -20,7 +20,7 @@ from ..database import (
     KnowledgeClaimCRUD, KnowledgeGapCRUD, KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
     JobStatus, DocumentStatus, UserCRUD, JobMemberCRUD, JobInviteCRUD
 )
-from ..auth import get_current_user
+from ..auth import get_current_user, get_current_user_optional
 from ..models import (
     JobCreateRequest, JobResponse, JobListResponse, DocumentRelationListResponse
 )
@@ -320,7 +320,8 @@ def job_to_response(job: Job, role: Optional[str] = None) -> JobResponse:
         chunk_count=job.chunk_count,
         created_at=job.created_at.isoformat(),
         updated_at=job.updated_at.isoformat(),
-        role=role
+        role=role,
+        is_public=bool(getattr(job, "is_public", False))
     )
 
 
@@ -386,23 +387,47 @@ async def create_job(
 @router.get("", response_model=JobListResponse)
 async def list_jobs(
     include_archived: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
-    List all jobs for the current user: owned + shared workspaces they are a member of.
+    List jobs visible to the caller.
+
+    Anonymous callers (no/invalid auth) see only public workspaces, with
+    role "viewer". Authenticated callers see: owned jobs (role "owner"),
+    jobs they're an explicit member of (role from membership), and public
+    jobs (role "viewer" unless a stronger explicit role already applies).
     """
+    if current_user is None:
+        public_jobs = JobCRUD.get_public_jobs(db, include_archived)
+        return JobListResponse(
+            total=len(public_jobs),
+            jobs=[job_to_response(job, role="viewer") for job in public_jobs]
+        )
+
+    jobs_by_id: dict[int, tuple] = {}
+
     owned_jobs = JobCRUD.get_user_jobs(db, current_user.id, include_archived)
-    responses = [job_to_response(job, role="owner") for job in owned_jobs]
+    for job in owned_jobs:
+        jobs_by_id[job.id] = (job, "owner")
 
     member_rows = JobMemberCRUD.list_job_ids_for_user(db, current_user.id)
     for member_job_id, member_role in member_rows:
+        if member_job_id in jobs_by_id:
+            continue
         job = JobCRUD.get_by_id(db, member_job_id)
         if not job:
             continue
         if not include_archived and job.status != JobStatus.ACTIVE.value:
             continue
-        responses.append(job_to_response(job, role=member_role))
+        jobs_by_id[member_job_id] = (job, member_role)
+
+    for job in JobCRUD.get_public_jobs(db, include_archived):
+        if job.id in jobs_by_id:
+            continue
+        jobs_by_id[job.id] = (job, "viewer")
+
+    responses = [job_to_response(job, role=role) for job, role in jobs_by_id.values()]
 
     return JobListResponse(
         total=len(responses),
@@ -534,14 +559,14 @@ async def delete_job_invite(
 @router.get("/{job_id}/members")
 async def list_job_members(
     job_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
-    """List members of a job workspace (including the owner). Viewer+."""
+    """List members of a job workspace (including the owner). Viewer+ (public jobs allow anonymous read)."""
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     members = []
     owner = UserCRUD.get_by_id(db, job.user_id)
@@ -661,11 +686,15 @@ async def update_job(
     job_id: int,
     name: Optional[str] = None,
     description: Optional[str] = None,
+    is_public: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Update a job's name or description.
+    Update a job's name, description, or public-visibility flag.
+
+    Setting is_public grants anonymous/unrelated users implicit "viewer"
+    access to this workspace's read endpoints. Owner only.
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -681,10 +710,12 @@ async def update_job(
         job.name = name
     if description is not None:
         job.description = description
+    if is_public is not None:
+        job.is_public = is_public
     db.commit()
     db.refresh(job)
 
-    return job_to_response(job)
+    return job_to_response(job, role="owner")
 
 
 @router.patch("/{job_id}/term-maps", response_model=JobResponse)
@@ -902,11 +933,11 @@ async def get_job_stats(
 @router.get("/{job_id}/documents")
 async def list_job_documents(
     job_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
-    List all documents in a job.
+    List all documents in a job. Public jobs allow anonymous read.
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -916,7 +947,7 @@ async def list_job_documents(
             detail="Job not found"
         )
 
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     documents = DocumentCRUD.get_job_documents(db, job_id)
 
@@ -947,11 +978,11 @@ async def list_job_documents(
 async def get_job_document_download_url(
     job_id: int,
     doc_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
-    Get a presigned URL to download a job document.
+    Get a presigned URL to download a job document. Public jobs allow anonymous read.
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -961,7 +992,7 @@ async def get_job_document_download_url(
             detail="Job not found"
         )
 
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)
     if not document:
@@ -986,11 +1017,11 @@ async def get_related_documents(
     job_id: int,
     doc_id: str,
     limit: int = 5,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
-    Get related documents for a specific document.
+    Get related documents for a specific document. Public jobs allow anonymous read.
     """
     job = JobCRUD.get_by_id(db, job_id)
 
@@ -1000,7 +1031,7 @@ async def get_related_documents(
             detail="Job not found"
         )
 
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     document = DocumentCRUD.get_by_doc_id(db, job_id, doc_id)
     if not document:
@@ -1045,7 +1076,7 @@ async def query_job(
     n_sources: int = 5,
     phase_filter: Optional[str] = None,
     topic_filter: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -1053,10 +1084,13 @@ async def query_job(
 
     Uses hybrid BM25 + dense search when enabled for improved retrieval.
     For LLM-powered answers with citations, use GET /{job_id}/chat instead.
+    Public jobs allow anonymous read; anonymous callers skip the per-user
+    API-call quota (the rate limiter covers abuse instead).
     """
-    from ..quotas import check_quota_for_api_call, get_quota_service
-    check_quota_for_api_call(current_user.id)
-    get_quota_service().increment_api_calls(current_user.id)
+    if current_user is not None:
+        from ..quotas import check_quota_for_api_call, get_quota_service
+        check_quota_for_api_call(current_user.id)
+        get_quota_service().increment_api_calls(current_user.id)
 
     from ..embeddings import get_embeddings
 
@@ -1068,7 +1102,7 @@ async def query_job(
             detail="Job not found"
         )
 
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     try:
         # Get collection
@@ -1321,7 +1355,7 @@ async def chat_with_job(
     phase_filter: Optional[str] = None,
     topic_filter: Optional[str] = None,
     deep_analysis: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -1345,10 +1379,14 @@ async def chat_with_job(
     - sources: List of cited sources
     - complexity: Query complexity classification
     - pipeline_stats: Execution statistics
+
+    Public jobs allow anonymous read; anonymous callers skip the per-user
+    API-call quota (the rate limiter covers abuse instead).
     """
-    from ..quotas import check_quota_for_api_call, get_quota_service
-    check_quota_for_api_call(current_user.id)
-    get_quota_service().increment_api_calls(current_user.id)
+    if current_user is not None:
+        from ..quotas import check_quota_for_api_call, get_quota_service
+        check_quota_for_api_call(current_user.id)
+        get_quota_service().increment_api_calls(current_user.id)
 
     import os
     from groq import Groq
@@ -1365,7 +1403,7 @@ async def chat_with_job(
             detail="Job not found"
         )
 
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     # Check for Groq API key
     groq_api_key = config.llm.groq_api_key or os.getenv("GROQ_API_KEY")

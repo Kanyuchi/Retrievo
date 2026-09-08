@@ -5,13 +5,15 @@ import logging
 import os
 from typing import List, Dict, Any
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user
+from ..auth import get_current_user, get_current_user_optional
 from ..config import load_config
 from ..database import (
-    get_db, JobCRUD,
+    get_db, User, JobCRUD,
     KnowledgeEntityCRUD, KnowledgeEdgeCRUD,
     KnowledgeClusterCRUD
 )
@@ -267,13 +269,14 @@ async def build_knowledge_graph_async(
 @router.get("/{job_id}/graph", response_model=KnowledgeGraphResponse)
 async def get_knowledge_graph(
     job_id: int,
-    current_user=Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
+    """Public jobs allow anonymous read."""
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     entities = KnowledgeEntityCRUD.list_for_job(db, job_id, limit=1000)
     edges = KnowledgeEdgeCRUD.list_for_job(db, job_id, limit=2000)
@@ -298,13 +301,14 @@ async def get_knowledge_graph(
 @router.get("/{job_id}/graph/clusters", response_model=KnowledgeGraphClusterResponse)
 async def get_graph_clusters(
     job_id: int,
-    current_user=Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
+    """Public jobs allow anonymous read."""
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     clusters = KnowledgeClusterCRUD.list_for_job(db, job_id)
     return {

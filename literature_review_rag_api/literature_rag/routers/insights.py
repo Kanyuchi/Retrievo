@@ -9,10 +9,10 @@ import chromadb
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user
+from ..auth import get_current_user, get_current_user_optional
 from ..config import load_config
 from ..database import (
-    get_db, JobCRUD,
+    get_db, User, JobCRUD,
     KnowledgeClaimCRUD, KnowledgeGapCRUD,
     KnowledgeEntityOccurrenceCRUD, KnowledgeEntityCRUD, KnowledgeClusterCRUD
 )
@@ -199,16 +199,16 @@ async def run_knowledge_insights_async(
 async def get_knowledge_insights(
     job_id: int,
     limit: int = Query(200, ge=1, le=1000),
-    current_user=Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
-    Get claims and detected gaps for a job.
+    Get claims and detected gaps for a job. Public jobs allow anonymous read.
     """
     job = JobCRUD.get_by_id(db, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    require_job_role(db, job, current_user.id, "viewer")
+    require_job_role(db, job, current_user.id if current_user else None, "viewer")
 
     claims = KnowledgeClaimCRUD.list_for_job(db, job_id, limit=limit)
     gaps = KnowledgeGapCRUD.list_for_job(db, job_id)

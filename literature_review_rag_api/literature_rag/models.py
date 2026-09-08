@@ -550,6 +550,7 @@ class JobResponse(BaseModel):
     created_at: str
     updated_at: str
     role: Optional[str] = None
+    is_public: bool = False
 
     class Config:
         from_attributes = True
