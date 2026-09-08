@@ -164,3 +164,9 @@
 - Stub cleanup: dead Discord/GitHub/Help/theme buttons removed; hardcoded shaunkudzi@gmail.com mock identity replaced with real auth data; Model Providers/MCP/Team/Agents hidden as stubs; KB switcher staleness fixed; toasts auto-dismiss bottom-right
 - OCR saga continued: deps+flag were fine — rq's 180s default job timeout killed mid-OCR (500-page scans) → RQ_JOB_TIMEOUT 7200; scans attempt 4 + full-claims thesis graph rebuild running
 - 84 tests green; audit archived in repo
+
+## 2026-09-07→08 — OCR proven on real scans; thesis corpus complete (59/59)
+- Full-claims thesis graph: 394 claims → 326 entities / 336 edges via queue (clean background run)
+- OCR end-to-end victories: Grabher (66 chunks), Bell's 500-page Coming of Post-Industrial Society (77 chunks — outlasted the poller, 2h rq timeout held), Weakness of Strong Ties (final straggler) — all indexed
+- Thesis KB final: 59 docs; every extractable page of the corpus is searchable, including scanned books
+- Fresh working invite link issued post-RC1-fix
