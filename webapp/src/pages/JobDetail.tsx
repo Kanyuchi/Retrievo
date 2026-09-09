@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -21,19 +21,45 @@ import {
   Link2,
   Users,
   Copy,
+  RotateCcw,
+  Ban,
 } from 'lucide-react';
+
+type UploadStatus = 'queued' | 'uploading' | 'indexing' | 'done' | 'failed' | 'skipped-duplicate';
 
 interface UploadQueueItem {
   id: string;
   file: File;
   phase: string;
   topic: string;
-  status: 'pending' | 'uploading' | 'completed' | 'failed';
+  status: UploadStatus;
   error?: string;
+  // Set once at dedupe time; lets the "re-import duplicates" checkbox
+  // toggle these items between 'queued' and 'skipped-duplicate' without
+  // losing track of which ones were actually flagged as duplicates.
+  isDuplicateDetected?: boolean;
   result?: {
     doc_id: string;
     chunks_indexed: number;
   };
+}
+
+const UPLOAD_CONCURRENCY = 2;
+
+// Normalize a filename for dedupe comparison: strip a trailing .pdf, lowercase,
+// and collapse any run of non-alphanumeric characters to a single underscore.
+function normalizeDocName(name: string): string {
+  return name
+    .replace(/\.pdf$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_');
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(bytes / 1024, 0.1).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 export default function JobDetail() {
@@ -55,6 +81,22 @@ export default function JobDetail() {
   const [uploadPhase, setUploadPhase] = useState('');
   const [uploadTopic, setUploadTopic] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [reimportDuplicates, setReimportDuplicates] = useState(false);
+  const [existingDocNames, setExistingDocNames] = useState<Set<string>>(new Set());
+  const [importSummary, setImportSummary] = useState<{ imported: number; skipped: number; failed: number } | null>(null);
+
+  // Mirrors uploadQueue so the concurrent worker loop below always reads the
+  // latest statuses without needing to be recreated on every state change.
+  const uploadQueueRef = useRef<UploadQueueItem[]>([]);
+  useEffect(() => {
+    uploadQueueRef.current = uploadQueue;
+  }, [uploadQueue]);
+
+  // Set once an import run stops starting new files ("Cancel remaining").
+  const cancelledRef = useRef(false);
+  // Tracks whether anything completed during this dialog session, so we
+  // know whether to refresh the document list on close.
+  const importedAnyRef = useRef(false);
 
   // Query state
   const [showQueryPanel, setShowQueryPanel] = useState(false);
@@ -202,20 +244,59 @@ export default function JobDetail() {
     }
   };
 
+  // Open the upload dialog and fetch the KB's current documents so newly
+  // selected files can be pre-flagged as duplicates before the user starts
+  // the import.
+  const openUploadModal = async () => {
+    setShowUploadModal(true);
+    setImportSummary(null);
+    importedAnyRef.current = false;
+    cancelledRef.current = false;
+    if (!numericJobId) return;
+    try {
+      const docsResponse = await api.getJobDocuments(numericJobId, { limit: 1000 }, accessToken || undefined);
+      setExistingDocNames(new Set(docsResponse.documents.map((d) => normalizeDocName(d.filename))));
+    } catch (err) {
+      // Dedupe is a convenience, not a gate — fail open so upload still works.
+      console.error('Failed to load existing documents for dedupe check:', err);
+      setExistingDocNames(new Set());
+    }
+  };
+
   // Handle file selection for multi-upload
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return;
 
-    const newItems: UploadQueueItem[] = Array.from(files).map((file, index) => ({
-      id: `${Date.now()}_${index}`,
-      file,
-      phase: uploadPhase,
-      topic: uploadTopic,
-      status: 'pending',
-    }));
+    const newItems: UploadQueueItem[] = Array.from(files).map((file, index) => {
+      const isDuplicate = existingDocNames.has(normalizeDocName(file.name));
+      return {
+        id: `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        phase: uploadPhase,
+        topic: uploadTopic,
+        status: (isDuplicate && !reimportDuplicates ? 'skipped-duplicate' : 'queued') as UploadStatus,
+        isDuplicateDetected: isDuplicate,
+      };
+    });
 
     setUploadQueue(prev => [...prev, ...newItems]);
   };
+
+  // Toggling "re-import duplicates" flips previously-detected duplicates
+  // between skipped and queued, without touching anything already running
+  // or finished.
+  useEffect(() => {
+    setUploadQueue(prev => prev.map(item => {
+      if (!item.isDuplicateDetected) return item;
+      if (reimportDuplicates && item.status === 'skipped-duplicate') {
+        return { ...item, status: 'queued' };
+      }
+      if (!reimportDuplicates && item.status === 'queued') {
+        return { ...item, status: 'skipped-duplicate' };
+      }
+      return item;
+    }));
+  }, [reimportDuplicates]);
 
   const removeFromQueue = (id: string) => {
     setUploadQueue(prev => prev.filter(item => item.id !== id));
@@ -227,53 +308,107 @@ export default function JobDetail() {
     );
   };
 
-  // Process upload queue
-  const handleUpload = async () => {
-    if (!accessToken || !numericJobId || uploadQueue.length === 0) return;
+  // Upload + poll a single file. api.uploadToJob resolves once the queue
+  // worker finishes processing (or throws on failure) — its internal
+  // polling is what covers indexing, so from the caller's side the whole
+  // await window is "in progress". We approximate the 'indexing' sub-phase
+  // with a short timer purely for a more informative status chip.
+  const processItem = useCallback(async (item: UploadQueueItem) => {
+    if (!accessToken || !numericJobId) return;
 
+    updateQueueItem(item.id, { status: 'uploading', error: undefined });
+    const indexingTimer = window.setTimeout(() => {
+      updateQueueItem(item.id, { status: 'indexing' });
+    }, 1500);
+
+    try {
+      const result = await api.uploadToJob(
+        numericJobId,
+        item.file,
+        item.phase || uploadPhase,
+        item.topic || uploadTopic,
+        accessToken
+      );
+      window.clearTimeout(indexingTimer);
+      importedAnyRef.current = true;
+      updateQueueItem(item.id, {
+        status: 'done',
+        result: {
+          doc_id: result.doc_id,
+          chunks_indexed: result.chunks_indexed,
+        },
+      });
+    } catch (err) {
+      window.clearTimeout(indexingTimer);
+      updateQueueItem(item.id, {
+        status: 'failed',
+        error: err instanceof Error ? err.message : t('files.upload_failed'),
+      });
+    }
+  }, [accessToken, numericJobId, uploadPhase, uploadTopic, t]);
+
+  // Concurrency-2 worker pool over the queue. Continue-on-error: a failed
+  // file doesn't stop the others. "Cancel remaining" just flips
+  // cancelledRef so workers stop picking up new files — in-flight uploads
+  // still finish naturally, and this same completion path runs either way.
+  const runQueue = useCallback(async () => {
+    if (!accessToken || !numericJobId) return;
+    cancelledRef.current = false;
     setIsUploading(true);
 
-    // Process each file sequentially
-    for (const item of uploadQueue) {
-      if (item.status !== 'pending') continue;
-
-      updateQueueItem(item.id, { status: 'uploading' });
-
-      try {
-        const result = await api.uploadToJob(
-          numericJobId,
-          item.file,
-          item.phase || uploadPhase,
-          item.topic || uploadTopic,
-          accessToken
+    const claimed = new Set<string>();
+    const worker = async () => {
+      for (;;) {
+        if (cancelledRef.current) return;
+        const next = uploadQueueRef.current.find(
+          (i) => i.status === 'queued' && !claimed.has(i.id)
         );
-
-        updateQueueItem(item.id, {
-          status: 'completed',
-          result: {
-            doc_id: result.doc_id,
-            chunks_indexed: result.chunks_indexed,
-          },
-        });
-      } catch (err) {
-        updateQueueItem(item.id, {
-          status: 'failed',
-          error: err instanceof Error ? err.message : t('files.upload_failed'),
-        });
+        if (!next) return;
+        claimed.add(next.id);
+        await processItem(next);
       }
-    }
+    };
+
+    await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
 
     setIsUploading(false);
 
-    // Reload data after all uploads
-    await loadJob();
+    const finalQueue = uploadQueueRef.current;
+    const imported = finalQueue.filter((i) => i.status === 'done').length;
+    const skipped = finalQueue.filter((i) => i.status === 'skipped-duplicate').length;
+    const failed = finalQueue.filter((i) => i.status === 'failed').length;
+    setImportSummary({ imported, skipped, failed });
+    toast[failed > 0 ? 'warning' : 'success'](
+      t('job_detail.import.summary', { imported, skipped, failed })
+    );
+
+    if (imported > 0) {
+      await loadJob();
+    }
+  }, [accessToken, numericJobId, processItem, loadJob, t]);
+
+  const handleRetry = (id: string) => {
+    updateQueueItem(id, { status: 'queued', error: undefined });
+    if (!isUploading) {
+      runQueue();
+    }
+  };
+
+  const handleCancelRemaining = () => {
+    cancelledRef.current = true;
   };
 
   const closeUploadModal = () => {
     if (!isUploading) {
       setShowUploadModal(false);
+      if (importedAnyRef.current) {
+        loadJob();
+      }
       setUploadQueue([]);
       setUploadTopic('');
+      setReimportDuplicates(false);
+      setExistingDocNames(new Set());
+      setImportSummary(null);
     }
   };
 
@@ -408,9 +543,11 @@ export default function JobDetail() {
     );
   }
 
-  const completedUploads = uploadQueue.filter(i => i.status === 'completed').length;
+  const completedUploads = uploadQueue.filter(i => i.status === 'done').length;
   const failedUploads = uploadQueue.filter(i => i.status === 'failed').length;
-  const pendingUploads = uploadQueue.filter(i => i.status === 'pending' || i.status === 'uploading').length;
+  const skippedUploads = uploadQueue.filter(i => i.status === 'skipped-duplicate').length;
+  const queuedUploads = uploadQueue.filter(i => i.status === 'queued').length;
+  const activeUploads = uploadQueue.filter(i => i.status === 'uploading' || i.status === 'indexing').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -456,7 +593,7 @@ export default function JobDetail() {
               )}
               {!isViewer && (
                 <button
-                  onClick={() => setShowUploadModal(true)}
+                  onClick={() => openUploadModal()}
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   <Upload className="h-5 w-5" />
@@ -545,7 +682,7 @@ export default function JobDetail() {
                 </p>
                 {!isViewer && (
                   <button
-                    onClick={() => setShowUploadModal(true)}
+                    onClick={() => openUploadModal()}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     <Upload className="h-5 w-5" />
@@ -954,32 +1091,51 @@ export default function JobDetail() {
                 </div>
               </div>
 
-              {/* Upload Queue */}
+              {/* Re-import duplicates toggle */}
+              {uploadQueue.some(i => i.isDuplicateDetected) && (
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <input
+                    id="reimport-duplicates"
+                    name="reimportDuplicates"
+                    type="checkbox"
+                    checked={reimportDuplicates}
+                    onChange={(e) => setReimportDuplicates(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  {t('job_detail.import.reimport_duplicates')}
+                </label>
+              )}
+
+              {/* Import Queue */}
               {uploadQueue.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">
                     {t('job_detail.files_count', { count: uploadQueue.length })}
                   </p>
-                  <div className="max-h-48 overflow-y-auto space-y-2">
+                  <div className="max-h-64 overflow-y-auto space-y-2">
                     {uploadQueue.map((item) => (
                       <div
                         key={item.id}
                         className={`flex items-center gap-3 p-2 rounded-lg ${
-                          item.status === 'completed'
+                          item.status === 'done'
                             ? 'bg-green-500/10'
                             : item.status === 'failed'
                             ? 'bg-destructive/10'
-                            : item.status === 'uploading'
+                            : item.status === 'uploading' || item.status === 'indexing'
                             ? 'bg-primary/10'
+                            : item.status === 'skipped-duplicate'
+                            ? 'bg-yellow-500/10'
                             : 'bg-secondary/50'
                         }`}
                       >
-                        {item.status === 'completed' ? (
+                        {item.status === 'done' ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
                         ) : item.status === 'failed' ? (
                           <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
-                        ) : item.status === 'uploading' ? (
+                        ) : item.status === 'uploading' || item.status === 'indexing' ? (
                           <Loader2 className="h-4 w-4 text-primary animate-spin flex-shrink-0" />
+                        ) : item.status === 'skipped-duplicate' ? (
+                          <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
                         ) : (
                           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         )}
@@ -987,19 +1143,46 @@ export default function JobDetail() {
                           <p className="text-sm text-foreground truncate">
                             {item.file.name}
                           </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(item.file.size)}
+                          </p>
                           {item.status === 'failed' && item.error && (
                             <p className="text-xs text-destructive">{item.error}</p>
                           )}
-                          {item.status === 'completed' && item.result && (
+                          {item.status === 'done' && item.result && (
                             <p className="text-xs text-green-500">
                               {item.result.chunks_indexed} {t('kb.chunks')}
                             </p>
                           )}
                         </div>
-                        {item.status === 'pending' && !isUploading && (
+                        <span
+                          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
+                            item.status === 'done'
+                              ? 'bg-green-500/20 text-green-500'
+                              : item.status === 'failed'
+                              ? 'bg-destructive/20 text-destructive'
+                              : item.status === 'uploading' || item.status === 'indexing'
+                              ? 'bg-primary/20 text-primary'
+                              : item.status === 'skipped-duplicate'
+                              ? 'bg-yellow-500/20 text-yellow-600'
+                              : 'bg-secondary text-muted-foreground'
+                          }`}
+                        >
+                          {t(`job_detail.import.status_${item.status.replace('-', '_')}`)}
+                        </span>
+                        {item.status === 'failed' && (
+                          <button
+                            onClick={() => handleRetry(item.id)}
+                            title={t('job_detail.import.retry')}
+                            className="p-1 text-muted-foreground hover:text-primary shrink-0"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
+                        {(item.status === 'queued' || item.status === 'skipped-duplicate') && !isUploading && (
                           <button
                             onClick={() => removeFromQueue(item.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive"
+                            className="p-1 text-muted-foreground hover:text-destructive shrink-0"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -1012,10 +1195,26 @@ export default function JobDetail() {
 
               {/* Progress Summary */}
               {isUploading && (
-                <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between gap-3">
                   <p className="text-sm text-foreground">
                     {t('job_detail.uploading_progress', { completed: completedUploads, total: uploadQueue.length })}
                     {failedUploads > 0 && t('job_detail.failed_count', { failed: failedUploads })}
+                  </p>
+                  <button
+                    onClick={handleCancelRemaining}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive shrink-0"
+                  >
+                    <Ban className="h-3.5 w-3.5" />
+                    {t('job_detail.import.cancel_remaining')}
+                  </button>
+                </div>
+              )}
+
+              {/* Completion Summary */}
+              {!isUploading && importSummary && (
+                <div className="p-3 bg-secondary/50 border border-border rounded-lg">
+                  <p className="text-sm text-foreground">
+                    {t('job_detail.import.summary', importSummary)}
                   </p>
                 </div>
               )}
@@ -1026,19 +1225,21 @@ export default function JobDetail() {
                   disabled={isUploading}
                   className="px-4 py-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {pendingUploads === 0 && completedUploads > 0 ? t('job_detail.done') : t('job_detail.cancel')}
+                  {queuedUploads === 0 && activeUploads === 0 && (completedUploads > 0 || failedUploads > 0 || skippedUploads > 0)
+                    ? t('job_detail.done')
+                    : t('job_detail.cancel')}
                 </button>
-                {pendingUploads > 0 && (
+                {queuedUploads > 0 && (
                   <button
-                    onClick={handleUpload}
-                    disabled={!uploadPhase || !uploadTopic || uploadQueue.length === 0 || isUploading}
+                    onClick={runQueue}
+                    disabled={!uploadPhase || !uploadTopic || isUploading}
                     className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isUploading
                       ? t('files.uploading')
-                      : uploadQueue.length > 1
-                      ? t('job_detail.upload_button_plural', { count: uploadQueue.length })
-                      : t('job_detail.upload_button', { count: uploadQueue.length })}
+                      : queuedUploads > 1
+                      ? t('job_detail.upload_button_plural', { count: queuedUploads })
+                      : t('job_detail.upload_button', { count: queuedUploads })}
                   </button>
                 )}
               </div>

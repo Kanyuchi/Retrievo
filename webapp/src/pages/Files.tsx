@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   FolderOpen, Search, Upload, ChevronLeft, ChevronRight,
   FileText, Trash2, X, AlertCircle, Loader2, Database, Folder
@@ -42,7 +43,7 @@ import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
-import type { UploadConfigResponse, TaskStatusResponse, JobDocument } from '@/lib/api';
+import type { UploadConfigResponse, JobDocument } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
 
 const containerVariants = {
@@ -81,9 +82,15 @@ interface DisplayDocument {
 }
 
 export default function Files() {
-  const { selectedKB, isDefaultSelected, refreshKBs } = useKnowledgeBase();
-  const { accessToken } = useAuth();
+  const navigate = useNavigate();
+  const { selectedKB, isLoading: kbLoading, refreshKBs } = useKnowledgeBase();
+  const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
   const { t } = useTranslation();
+
+  // Viewer role (including anonymous visitors on a public/demo KB) cannot
+  // upload or delete — same role-hiding pattern used in JobDetail.tsx.
+  const isViewer = selectedKB?.role === 'viewer';
+  const canUpload = !!selectedKB && !isViewer;
 
   // State
   const [documents, setDocuments] = useState<DisplayDocument[]>([]);
@@ -117,84 +124,80 @@ export default function Files() {
   // Job stats for phases/topics
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
 
-  // Load documents and config when KB changes
+  // Only bounce to login when there's genuinely no (public) KB to browse;
+  // a selected public KB is browsable (read-only) without an account.
   useEffect(() => {
-    loadDocuments();
-    loadUploadConfig();
-    loadJobStats();
-  }, [selectedKB?.id, isDefaultSelected, accessToken]);
+    if (!authLoading && !kbLoading && !isAuthenticated && !selectedKB) {
+      navigate('/login?redirect=/files');
+    }
+  }, [authLoading, kbLoading, isAuthenticated, selectedKB, navigate]);
 
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     if (!selectedKB) return;
 
     try {
       setLoading(true);
-      if (isDefaultSelected) {
-        const response = await api.listDocuments({ limit: 500 }, accessToken || undefined);
-        setDocuments(response.documents.map(doc => ({
-          doc_id: doc.doc_id,
-          title: doc.title,
-          authors: doc.authors,
-          year: doc.year,
-          phase: doc.phase,
-          topic_category: doc.topic_category,
-          filename: doc.filename,
-          total_pages: doc.total_pages,
-        })));
-      } else {
-        const response = await api.getJobDocuments(
-          selectedKB.id as number,
-          { limit: 500 },
-          accessToken || undefined
-        );
-        setDocuments(response.documents.map((doc: JobDocument) => ({
-          doc_id: doc.doc_id,
-          title: doc.title || undefined,
-          authors: doc.authors || undefined,
-          year: doc.year || undefined,
-          phase: doc.phase || undefined,
-          topic_category: doc.topic_category || undefined,
-          filename: doc.filename,
-          total_pages: doc.total_pages || undefined,
-          chunk_count: doc.chunk_count,
-        })));
-      }
+      const response = await api.getJobDocuments(
+        selectedKB.id,
+        { limit: 500 },
+        accessToken || undefined
+      );
+      setDocuments(response.documents.map((doc: JobDocument) => ({
+        doc_id: doc.doc_id,
+        title: doc.title || undefined,
+        authors: doc.authors || undefined,
+        year: doc.year || undefined,
+        phase: doc.phase || undefined,
+        topic_category: doc.topic_category || undefined,
+        filename: doc.filename,
+        total_pages: doc.total_pages || undefined,
+        chunk_count: doc.chunk_count,
+      })));
     } catch (error) {
       console.error('Failed to load documents:', error);
       toast.error(t('files.load_failed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedKB, accessToken, t]);
 
-  const loadUploadConfig = async () => {
+  const loadUploadConfig = useCallback(async () => {
     try {
       const config = await api.getUploadConfig(accessToken || undefined);
       setUploadConfig(config);
     } catch (error) {
       console.error('Failed to load upload config:', error);
     }
-  };
+  }, [accessToken]);
 
-  const loadJobStats = async () => {
-    if (!isDefaultSelected && selectedKB && accessToken) {
+  const loadJobStats = useCallback(async () => {
+    if (selectedKB && accessToken) {
       try {
-        const stats = await api.getJobStats(selectedKB.id as number, accessToken);
+        const stats = await api.getJobStats(selectedKB.id, accessToken);
         setJobStats({ phases: stats.phases, topics: stats.topics });
       } catch (err) {
         console.error('Failed to load job stats:', err);
+        setJobStats(null);
       }
     } else {
       setJobStats(null);
     }
-  };
+  }, [selectedKB, accessToken]);
+
+  // Load documents and config when KB changes
+  useEffect(() => {
+    loadDocuments();
+    loadUploadConfig();
+    loadJobStats();
+  }, [loadDocuments, loadUploadConfig, loadJobStats]);
 
   // Drag and drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!canUpload) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
-  }, []);
+  }, [canUpload]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -203,14 +206,16 @@ export default function Files() {
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!canUpload) return;
     e.preventDefault();
     e.stopPropagation();
-  }, []);
+  }, [canUpload]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    if (!canUpload) return;
 
     const files = Array.from(e.dataTransfer.files);
     const pdfFile = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -221,7 +226,7 @@ export default function Files() {
     } else {
       toast.error(t('files.drop_pdf'));
     }
-  }, []);
+  }, [canUpload, t]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -253,67 +258,25 @@ export default function Files() {
 
     try {
       setUploading(true);
-      setUploadProgress(0);
-      setUploadMessage(t('files.uploading'));
+      setUploadProgress(20);
+      setUploadMessage(t('files.processing'));
 
-      if (isDefaultSelected) {
-        // Upload to default collection (async with polling)
-        const uploadResponse = await api.uploadPDFAsync(
-          selectedFile,
-          selectedPhase,
-          topic,
-          accessToken || undefined
-        );
+      const response = await api.uploadToJob(
+        selectedKB.id,
+        selectedFile,
+        selectedPhase,
+        topic,
+        accessToken || undefined
+      );
 
-        setUploadProgress(10);
-        setUploadMessage(t('files.upload_progress'));
-
-        // Poll for status updates
-        const finalStatus = await api.pollUploadStatus(
-          uploadResponse.task_id,
-          (status: TaskStatusResponse) => {
-            setUploadProgress(status.progress);
-            setUploadMessage(status.message);
-          },
-          500,
-          600,
-          accessToken || undefined
-        );
-
-        if (finalStatus.status === 'completed' && finalStatus.result) {
-          toast.success(t('files.upload_success', { name: finalStatus.result.filename }), {
-            description: `${finalStatus.result.chunks_indexed} ${t('kb.chunks')}`,
-          });
-          setUploadDialogOpen(false);
-          resetUploadForm();
-          loadDocuments();
-        } else if (finalStatus.status === 'failed') {
-          toast.error(t('files.upload_failed'), {
-            description: finalStatus.error || t('common.unknown_error'),
-          });
-        }
-      } else {
-        // Upload to job collection (synchronous)
-        setUploadProgress(20);
-        setUploadMessage(t('files.processing'));
-
-        const response = await api.uploadToJob(
-          selectedKB.id as number,
-          selectedFile,
-          selectedPhase,
-          topic,
-          accessToken || undefined
-        );
-
-        setUploadProgress(100);
-        toast.success(t('files.upload_success', { name: selectedFile.name }), {
-          description: `${response.chunks_indexed} ${t('kb.chunks')}`,
-        });
-        setUploadDialogOpen(false);
-        resetUploadForm();
-        loadDocuments();
-        refreshKBs(); // Refresh KB list to update counts
-      }
+      setUploadProgress(100);
+      toast.success(t('files.upload_success', { name: selectedFile.name }), {
+        description: `${response.chunks_indexed} ${t('kb.chunks')}`,
+      });
+      setUploadDialogOpen(false);
+      resetUploadForm();
+      loadDocuments();
+      refreshKBs(); // Refresh KB list to update counts
     } catch (error) {
       console.error('Upload error:', error);
       toast.error(t('files.upload_failed'), {
@@ -345,28 +308,14 @@ export default function Files() {
     try {
       setDeleting(true);
 
-      if (isDefaultSelected) {
-        const result = await api.deleteDocument(documentToDelete.doc_id, accessToken || undefined);
-        if (result.success) {
-          toast.success(t('common.delete'), {
-            description: `Removed ${result.chunks_deleted} ${t('kb.chunks')}`,
-          });
-        } else {
-          toast.error(t('common.delete'), {
-            description: result.error || t('common.unknown_error'),
-          });
-          return;
-        }
-      } else {
-        const result = await api.deleteJobDocument(
-          selectedKB.id as number,
-          documentToDelete.doc_id,
-          accessToken || undefined
-        );
-        toast.success(t('common.delete'), {
-          description: `Removed ${result.chunks_deleted} ${t('kb.chunks')}`,
-        });
-      }
+      const result = await api.deleteJobDocument(
+        selectedKB.id,
+        documentToDelete.doc_id,
+        accessToken || undefined
+      );
+      toast.success(t('common.delete'), {
+        description: `Removed ${result.chunks_deleted} ${t('kb.chunks')}`,
+      });
 
       setDeleteDialogOpen(false);
       setDocumentToDelete(null);
@@ -409,12 +358,7 @@ export default function Files() {
 
   // Get phases and topics for upload form
   const availablePhases = uploadConfig?.phases || [];
-  const availableTopics = isDefaultSelected
-    ? uploadConfig?.existing_topics || []
-    : Object.keys(jobStats?.topics || {});
-
-  // Can upload if: default collection has upload enabled, or it's a user job
-  const canUpload = isDefaultSelected ? uploadConfig?.enabled : !!accessToken;
+  const availableTopics = Object.keys(jobStats?.topics || {});
 
   return (
     <motion.div
@@ -452,7 +396,7 @@ export default function Files() {
               <h1 className="text-2xl font-semibold text-white">{t('files.title')}</h1>
               {/* Show which KB is being viewed */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {isDefaultSelected ? (
+                {selectedKB?.isPublic ? (
                   <Database className="w-3 h-3" />
                 ) : (
                   <Folder className="w-3 h-3" />
@@ -475,24 +419,27 @@ export default function Files() {
               />
             </div>
 
-            <input
-              id="files-upload"
-              name="filesUpload"
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+            {canUpload && (
+              <>
+                <input
+                  id="files-upload"
+                  name="filesUpload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
 
-            <Button
-              className="bg-white text-background hover:bg-white/90 gap-2"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!canUpload}
-            >
-              <Upload className="w-4 h-4" />
-              {t('common.upload')}
-            </Button>
+                <Button
+                  className="bg-white text-background hover:bg-white/90 gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  {t('common.upload')}
+                </Button>
+              </>
+            )}
           </div>
         </motion.div>
 
@@ -510,20 +457,22 @@ export default function Files() {
                   <TableHead className="text-muted-foreground font-medium">{t('files.table_topic')}</TableHead>
                   <TableHead className="text-muted-foreground font-medium">{t('files.table_year')}</TableHead>
                   <TableHead className="text-muted-foreground font-medium">{t('files.table_size')}</TableHead>
-                  <TableHead className="text-muted-foreground font-medium text-right">{t('files.table_action')}</TableHead>
+                  {!isViewer && (
+                    <TableHead className="text-muted-foreground font-medium text-right">{t('files.table_action')}</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={isViewer ? 6 : 7} className="text-center py-12">
                       <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mx-auto" />
                       <p className="text-muted-foreground mt-2">{t('files.loading_documents')}</p>
                     </TableCell>
                   </TableRow>
                 ) : paginatedDocuments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={isViewer ? 6 : 7} className="text-center py-12">
                       <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground">
                         {searchQuery ? t('files.no_match') : t('files.no_documents')}
@@ -568,16 +517,18 @@ export default function Files() {
                       <TableCell className="text-muted-foreground">{doc.topic_category || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">{doc.year || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">{formatFileSize(doc.total_pages, doc.chunk_count)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                          onClick={() => handleDeleteClick(doc)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
+                      {!isViewer && (
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                            onClick={() => handleDeleteClick(doc)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

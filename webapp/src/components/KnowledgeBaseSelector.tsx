@@ -4,6 +4,7 @@ import { ChevronDown, Database, Folder, Plus, Check, Loader2 } from 'lucide-reac
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
 
 export default function KnowledgeBaseSelector() {
   const { selectedKB, availableKBs, selectKB, isLoading } = useKnowledgeBase();
@@ -19,12 +20,17 @@ export default function KnowledgeBaseSelector() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary text-sm transition-colors max-w-[200px]"
       >
-        {selectedKB.isDefault ? (
+        {selectedKB.isPublic ? (
           <Database className="h-4 w-4 text-primary flex-shrink-0" />
         ) : (
           <Folder className="h-4 w-4 text-primary flex-shrink-0" />
         )}
         <span className="truncate text-foreground">{selectedKB.name}</span>
+        {selectedKB.isPublic && (
+          <Badge variant="secondary" className="bg-secondary/50 shrink-0">
+            {t('kb.demo_badge')}
+          </Badge>
+        )}
         {isLoading ? (
           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground flex-shrink-0" />
         ) : (
@@ -57,13 +63,20 @@ export default function KnowledgeBaseSelector() {
                       : 'hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {kb.isDefault ? (
+                  {kb.isPublic ? (
                     <Database className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                   ) : (
                     <Folder className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{kb.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{kb.name}</p>
+                      {kb.isPublic && (
+                        <Badge variant="secondary" className="bg-secondary/50 shrink-0">
+                          {t('kb.demo_badge')}
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {kb.document_count} {t('kb.docs')} · {kb.chunk_count.toLocaleString()} {t('kb.chunks')}
                     </p>

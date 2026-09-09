@@ -345,6 +345,10 @@ export interface Job {
   created_at: string;
   updated_at: string;
   role?: string;
+  // True for public/demo workspaces (e.g. the retired "Public Demo Collection"
+  // is now backed by real public jobs). Anonymous callers to GET /api/jobs
+  // only ever see public jobs, with role "viewer".
+  is_public?: boolean;
 }
 
 export interface JobListResponse {
@@ -609,6 +613,8 @@ class ApiClient {
   }
 
   // Stats
+  /** @deprecated Legacy global-collection endpoint. Frontend now reads document_count/chunk_count
+   * off the job payload (GET /api/jobs) instead — use getJobStats for per-job stats. */
   async getStats(accessToken?: string): Promise<StatsResponse> {
     const headers: Record<string, string> = {};
     if (accessToken) {
@@ -618,6 +624,7 @@ class ApiClient {
   }
 
   // Papers
+  /** @deprecated Legacy global-collection endpoint. Use getJobDocuments for job-scoped listing. */
   async getPapers(params?: {
     phase_filter?: string;
     topic_filter?: string;
@@ -636,6 +643,7 @@ class ApiClient {
   }
 
   // Semantic Search
+  /** @deprecated Legacy global-collection endpoint. Use queryJob for job-scoped search. */
   async search(params: {
     query: string;
     n_results?: number;
@@ -660,6 +668,7 @@ class ApiClient {
   }
 
   // Query (for chat) - uses agentic LLM-powered /api/chat endpoint
+  /** @deprecated Legacy global-collection endpoint. Use chatJob for job-scoped chat. */
   async query(request: QueryRequest, accessToken?: string): Promise<ChatResponse> {
     const headers: Record<string, string> = {};
     if (accessToken) {
@@ -690,6 +699,7 @@ class ApiClient {
   }
 
   // Upload PDF
+  /** @deprecated Legacy global-collection endpoint. Use uploadToJob for job-scoped upload. */
   async uploadPDF(
     file: File,
     phase: string,
@@ -766,6 +776,7 @@ class ApiClient {
   }
 
   // List documents
+  /** @deprecated Legacy global-collection endpoint. Use getJobDocuments for job-scoped listing. */
   async listDocuments(params?: {
     phase_filter?: string;
     topic_filter?: string;
@@ -784,6 +795,7 @@ class ApiClient {
   }
 
   // Delete document
+  /** @deprecated Legacy global-collection endpoint. Use deleteJobDocument for job-scoped delete. */
   async deleteDocument(docId: string, accessToken?: string): Promise<DeleteResponse> {
     const headers: Record<string, string> = {};
     const bearer = this.resolveBearerToken(accessToken);
@@ -804,6 +816,7 @@ class ApiClient {
   }
 
   // Async upload PDF (returns task_id for polling)
+  /** @deprecated Legacy global-collection endpoint. Use uploadToJob for job-scoped upload. */
   async uploadPDFAsync(
     file: File,
     phase: string,

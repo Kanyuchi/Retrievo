@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Search as SearchIcon, Loader2, FileText, ChevronDown, Filter, Database, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useStats } from '@/hooks/useApi';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
-import type { SearchResult, JobQueryResult } from '@/lib/api';
+import type { JobQueryResult } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
 import {
   DropdownMenu,
@@ -53,6 +53,7 @@ interface DisplayResult {
 }
 
 export default function Search() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('');
   const [topicFilter, setTopicFilter] = useState<string>('');
@@ -61,29 +62,39 @@ export default function Search() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const { selectedKB, isDefaultSelected } = useKnowledgeBase();
-  const { accessToken } = useAuth();
-  const { data: defaultStats } = useStats(accessToken || undefined);
+  const { selectedKB, isLoading: kbLoading } = useKnowledgeBase();
+  const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
   const { t } = useTranslation();
 
-  // Job stats for non-default KB
+  // Job stats power the phase/topic filter dropdowns.
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
 
-  // Load job stats when KB changes
+  // Only bounce to login when there's genuinely no (public) KB to search;
+  // a selected public KB is browsable without an account.
   useEffect(() => {
-    if (!isDefaultSelected && selectedKB && accessToken) {
-      api.getJobStats(selectedKB.id as number, accessToken)
+    if (!authLoading && !kbLoading && !isAuthenticated && !selectedKB) {
+      navigate('/login?redirect=/searches');
+    }
+  }, [authLoading, kbLoading, isAuthenticated, selectedKB, navigate]);
+
+  // Load job stats when KB changes. Best-effort — a 401 here (e.g. a
+  // deployment where job stats aren't yet exposed anonymously) just leaves
+  // the filter dropdowns empty rather than breaking the page.
+  useEffect(() => {
+    if (selectedKB) {
+      api.getJobStats(selectedKB.id, accessToken || undefined)
         .then(stats => setJobStats({ phases: stats.phases, topics: stats.topics }))
-        .catch(err => console.error('Failed to load job stats:', err));
+        .catch(err => {
+          console.error('Failed to load job stats:', err);
+          setJobStats(null);
+        });
     } else {
       setJobStats(null);
     }
-  }, [selectedKB, isDefaultSelected, accessToken]);
+  }, [selectedKB, accessToken]);
 
-  // Use appropriate stats based on selected KB
-  const stats = isDefaultSelected ? defaultStats : jobStats;
-  const phases = stats ? Object.keys(stats.phases) : [];
-  const topics = stats ? Object.keys(stats.topics) : [];
+  const phases = jobStats ? Object.keys(jobStats.phases) : [];
+  const topics = jobStats ? Object.keys(jobStats.topics) : [];
 
   // Reset filters and results when KB changes
   useEffect(() => {
@@ -102,52 +113,30 @@ export default function Search() {
     setHasSearched(true);
 
     try {
-      if (isDefaultSelected) {
-        // Search default collection
-        const searchResults: SearchResult[] = await api.search({
-          query: query.trim(),
-          n_results: 10,
+      const response = await api.queryJob(
+        selectedKB.id,
+        query.trim(),
+        {
+          n_sources: 10,
           phase_filter: phaseFilter || undefined,
           topic_filter: topicFilter || undefined,
-        }, accessToken || undefined);
+        },
+        accessToken || undefined
+      );
 
-        setResults(searchResults.map(r => ({
-          doc_id: r.doc_id,
-          title: r.title,
-          authors: r.authors,
-          year: r.year,
-          phase: r.phase,
-          topic: r.topic,
-          chunk_text: r.chunk_text,
-          relevance_score: r.relevance_score,
+      if (response.results && response.results.length > 0) {
+        setResults(response.results.map((r: JobQueryResult) => ({
+          doc_id: r.metadata.doc_id,
+          title: r.metadata.title || 'Untitled',
+          authors: r.metadata.authors,
+          year: r.metadata.year,
+          phase: r.metadata.phase,
+          topic: r.metadata.topic_category,
+          chunk_text: r.content,
+          relevance_score: r.score,
         })));
       } else {
-        // Search job collection using query endpoint
-        const response = await api.queryJob(
-          selectedKB.id as number,
-          query.trim(),
-          {
-            n_sources: 10,
-            phase_filter: phaseFilter || undefined,
-            topic_filter: topicFilter || undefined,
-          },
-          accessToken || undefined
-        );
-
-        if (response.results && response.results.length > 0) {
-          setResults(response.results.map((r: JobQueryResult) => ({
-            doc_id: r.metadata.doc_id,
-            title: r.metadata.title || 'Untitled',
-            authors: r.metadata.authors,
-            year: r.metadata.year,
-            phase: r.metadata.phase,
-            topic: r.metadata.topic_category,
-            chunk_text: r.content,
-            relevance_score: r.score,
-          })));
-        } else {
-          setResults([]);
-        }
+        setResults([]);
       }
     } catch (err) {
       console.error('Search error:', err);
@@ -156,7 +145,7 @@ export default function Search() {
     } finally {
       setLoading(false);
     }
-  }, [query, selectedKB, isDefaultSelected, accessToken, phaseFilter, topicFilter]);
+  }, [query, selectedKB, accessToken, phaseFilter, topicFilter]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -185,7 +174,7 @@ export default function Search() {
               <h1 className="text-2xl font-semibold text-white">{t('search.title')}</h1>
               {/* Show which KB is being searched */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {isDefaultSelected ? (
+                {selectedKB?.isPublic ? (
                   <Database className="w-3 h-3" />
                 ) : (
                   <Folder className="w-3 h-3" />
@@ -203,7 +192,7 @@ export default function Search() {
               <div className="flex-1 relative">
                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  placeholder={t('search.search_placeholder', { name: isDefaultSelected ? t('chat.the_literature') : selectedKB?.name })}
+                  placeholder={t('search.search_placeholder', { name: selectedKB?.name })}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -354,7 +343,7 @@ export default function Search() {
               <SearchIcon className="w-8 h-8 text-muted-foreground" />
             </div>
             <p className="text-muted-foreground text-sm">
-              {t('search.empty_prompt', { name: isDefaultSelected ? t('chat.the_literature') : `"${selectedKB?.name}"` })}
+              {t('search.empty_prompt', { name: selectedKB ? `"${selectedKB.name}"` : '' })}
             </p>
             {selectedKB && (
               <p className="text-xs mt-2 text-muted-foreground/70">

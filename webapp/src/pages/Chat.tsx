@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Send, Loader2, Bot, User, ChevronDown, Filter, Database, Folder, Sparkles, Clock, Zap, ChevronRight, Download, Plus, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { useStats } from '@/hooks/useApi';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
@@ -55,44 +55,53 @@ interface Message {
 }
 
 export default function Chat() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<string>('');
   const [topicFilter, setTopicFilter] = useState<string>('');
-  const [synthesisMode, setSynthesisMode] = useState<'paragraph' | 'bullet_points' | 'structured'>('paragraph');
   const [deepAnalysis, setDeepAnalysis] = useState(false);
   const [expandedStats, setExpandedStats] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ id: number; title?: string | null; created_at: string; updated_at: string }>>([]);
   const [activeSession, setActiveSession] = useState<{ id: number; title?: string | null; created_at: string; updated_at: string } | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 
-  const { selectedKB, isDefaultSelected } = useKnowledgeBase();
-  const { accessToken } = useAuth();
-  const { data: defaultStats } = useStats(accessToken || undefined);
+  const { selectedKB, isLoading: kbLoading } = useKnowledgeBase();
+  const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
   const { t } = useTranslation();
 
-  // Job stats for non-default KB
+  // Job stats power the phase/topic filter dropdowns.
   const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load job stats when KB changes
+  // Only bounce to login when there's genuinely no (public) KB to chat
+  // with; a selected public KB is chattable without an account.
   useEffect(() => {
-    if (!isDefaultSelected && selectedKB && accessToken) {
-      api.getJobStats(selectedKB.id as number, accessToken)
+    if (!authLoading && !kbLoading && !isAuthenticated && !selectedKB) {
+      navigate('/login?redirect=/chats');
+    }
+  }, [authLoading, kbLoading, isAuthenticated, selectedKB, navigate]);
+
+  // Load job stats when KB changes. Best-effort — a 401 here just leaves
+  // the filter dropdowns empty rather than breaking the page.
+  useEffect(() => {
+    if (selectedKB) {
+      api.getJobStats(selectedKB.id, accessToken || undefined)
         .then(stats => setJobStats({ phases: stats.phases, topics: stats.topics }))
-        .catch(err => console.error('Failed to load job stats:', err));
+        .catch(err => {
+          console.error('Failed to load job stats:', err);
+          setJobStats(null);
+        });
     } else {
       setJobStats(null);
     }
-  }, [selectedKB, isDefaultSelected, accessToken]);
+  }, [selectedKB, accessToken]);
 
-  // Use appropriate stats based on selected KB
-  const stats = isDefaultSelected ? defaultStats : jobStats;
-  const phases = stats ? Object.keys(stats.phases) : [];
-  const topics = stats ? Object.keys(stats.topics) : [];
+  const phases = jobStats ? Object.keys(jobStats.phases) : [];
+  const topics = jobStats ? Object.keys(jobStats.topics) : [];
 
   // Reset filters when KB changes
   useEffect(() => {
@@ -102,11 +111,12 @@ export default function Chat() {
     setActiveSession(null);
   }, [selectedKB?.id]);
 
-  // Load chat sessions for non-default KBs
+  // Load persisted chat sessions — only possible when signed in (the
+  // /api/chats endpoints are user-scoped, not exposed anonymously).
   useEffect(() => {
-    if (!isDefaultSelected && selectedKB && accessToken) {
+    if (selectedKB && accessToken) {
       setSessionLoading(true);
-      api.listChatSessions(selectedKB.id as number, accessToken)
+      api.listChatSessions(selectedKB.id, accessToken)
         .then((response) => setSessions(response.sessions))
         .catch((err) => console.error('Failed to load chat sessions:', err))
         .finally(() => setSessionLoading(false));
@@ -114,7 +124,7 @@ export default function Chat() {
       setSessions([]);
       setActiveSession(null);
     }
-  }, [selectedKB, isDefaultSelected, accessToken]);
+  }, [selectedKB, accessToken]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -183,9 +193,9 @@ export default function Chat() {
   };
 
   const handleCreateSession = async () => {
-    if (!selectedKB || !accessToken || isDefaultSelected) return;
+    if (!selectedKB || !accessToken) return;
     try {
-      const newSession = await api.createChatSession(selectedKB.id as number, undefined, accessToken);
+      const newSession = await api.createChatSession(selectedKB.id, undefined, accessToken);
       setSessions((prev) => [newSession, ...prev]);
       setActiveSession(newSession);
       setMessages([]);
@@ -246,10 +256,10 @@ export default function Chat() {
 
     try {
       let sessionToUse = activeSession;
-      if (!isDefaultSelected && selectedKB && accessToken && !sessionToUse) {
+      if (selectedKB && accessToken && !sessionToUse) {
         try {
           const newSession = await api.createChatSession(
-            selectedKB.id as number,
+            selectedKB.id,
             buildSessionTitle(userMessage.content),
             accessToken
           );
@@ -272,69 +282,33 @@ export default function Chat() {
         );
       }
 
-      let assistantContent = '';
-      let sources: Message['sources'] = [];
-      let complexity: Message['complexity'] = undefined;
-      let pipelineStats: Message['pipelineStats'] = undefined;
-      let modelUsed: string | undefined = undefined;
-      let storedCitations: Array<Record<string, unknown>> | undefined = undefined;
-
-      if (isDefaultSelected) {
-        // Query default collection with agentic pipeline
-        const response = await api.query({
-          question: userMessage.content,
-          n_results: 5,
-          synthesis_mode: synthesisMode,
+      const response = await api.chatJob(
+        selectedKB.id,
+        userMessage.content,
+        {
+          n_sources: 5,
           phase_filter: phaseFilter || undefined,
           topic_filter: topicFilter || undefined,
           deep_analysis: deepAnalysis,
-        }, accessToken || undefined);
+        },
+        accessToken || undefined
+      );
 
-        assistantContent = response.answer;
-        sources = response.sources?.map(source => ({
-          title: `[${source.citation_number}] ${source.authors} (${source.year}). ${source.title}`,
-          score: source.citation_number,
-        }));
-        complexity = response.complexity;
-        pipelineStats = response.pipeline_stats;
-        modelUsed = response.model;
-        storedCitations = response.sources?.map(source => ({
-          citation_number: source.citation_number,
-          authors: source.authors,
-          year: source.year,
-          title: source.title,
-          doc_id: source.doc_id,
-        }));
-      } else {
-        // Query job collection with agentic pipeline (same as default)
-        const response = await api.chatJob(
-          selectedKB.id as number,
-          userMessage.content,
-          {
-            n_sources: 5,
-            phase_filter: phaseFilter || undefined,
-            topic_filter: topicFilter || undefined,
-            deep_analysis: deepAnalysis,
-          },
-          accessToken || undefined
-        );
-
-        assistantContent = response.answer;
-        sources = response.sources?.map(source => ({
-          title: `[${source.citation_number}] ${source.authors} (${source.year}). ${source.title}`,
-          score: source.citation_number,
-        }));
-        complexity = response.complexity;
-        pipelineStats = response.pipeline_stats;
-        modelUsed = response.model;
-        storedCitations = response.sources?.map(source => ({
-          citation_number: source.citation_number,
-          authors: source.authors,
-          year: source.year,
-          title: source.title,
-          doc_id: source.doc_id,
-        }));
-      }
+      const assistantContent = response.answer;
+      const sources: Message['sources'] = response.sources?.map(source => ({
+        title: `[${source.citation_number}] ${source.authors} (${source.year}). ${source.title}`,
+        score: source.citation_number,
+      }));
+      const complexity: Message['complexity'] = response.complexity;
+      const pipelineStats: Message['pipelineStats'] = response.pipeline_stats;
+      const modelUsed: string | undefined = response.model;
+      const storedCitations: Array<Record<string, unknown>> | undefined = response.sources?.map(source => ({
+        citation_number: source.citation_number,
+        authors: source.authors,
+        year: source.year,
+        title: source.title,
+        doc_id: source.doc_id,
+      }));
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -369,7 +343,7 @@ export default function Chat() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, selectedKB, isDefaultSelected, accessToken, phaseFilter, topicFilter, synthesisMode, deepAnalysis, activeSession]);
+  }, [input, loading, selectedKB, accessToken, phaseFilter, topicFilter, deepAnalysis, activeSession]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -399,13 +373,13 @@ export default function Chat() {
               <h1 className="text-2xl font-semibold text-white">{t('chat.title')}</h1>
               {/* Show which KB is being queried */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {isDefaultSelected ? (
+                {selectedKB?.isPublic ? (
                   <Database className="w-3 h-3" />
                 ) : (
                   <Folder className="w-3 h-3" />
                 )}
                 <span>{t('chat.querying', { name: selectedKB?.name })}</span>
-                {!isDefaultSelected && (
+                {accessToken && (
                   <span className="text-xs text-muted-foreground/70">{t('chat.history_saved')}</span>
                 )}
               </div>
@@ -413,8 +387,8 @@ export default function Chat() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Chat Sessions (only for non-default KBs) */}
-            {!isDefaultSelected && selectedKB && accessToken && (
+            {/* Chat Sessions (only when signed in) */}
+            {selectedKB && accessToken && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -470,24 +444,6 @@ export default function Chat() {
               />
             </div>
 
-            {/* Synthesis Mode - only for default collection */}
-            {isDefaultSelected && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="border-border bg-secondary/50 hover:bg-secondary gap-2">
-                    <Filter className="w-4 h-4" />
-                    {synthesisMode === 'paragraph' ? 'Paragraph' : synthesisMode === 'bullet_points' ? 'Bullet Points' : 'Structured'}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border">
-                  <DropdownMenuItem onClick={() => setSynthesisMode('paragraph')}>Paragraph</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSynthesisMode('bullet_points')}>Bullet Points</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSynthesisMode('structured')}>Structured</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
             {/* Phase Filter */}
             {phases.length > 0 && (
               <DropdownMenu>
@@ -541,9 +497,7 @@ export default function Chat() {
                   <Bot className="w-16 h-16 mb-4 opacity-50" />
                   <p className="text-lg font-medium">{t('chat.start_conversation')}</p>
                   <p className="text-sm text-center max-w-md mt-2">
-                    {isDefaultSelected
-                      ? t('chat.ask_default')
-                      : t('chat.ask_kb', { name: selectedKB?.name })}
+                    {t('chat.ask_kb', { name: selectedKB?.name })}
                   </p>
                   {selectedKB && (
                     <p className="text-xs mt-4 text-muted-foreground/70">
@@ -698,7 +652,7 @@ export default function Chat() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={t('chat.ask_question', { name: isDefaultSelected ? t('chat.the_literature') : selectedKB?.name })}
+                  placeholder={t('chat.ask_question', { name: selectedKB?.name })}
                   className="flex-1 bg-secondary/50 border-border focus:border-primary"
                   disabled={loading}
                 />

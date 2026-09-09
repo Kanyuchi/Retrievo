@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Database, Filter, Search, ChevronLeft, ChevronRight, FileText, Loader2, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +19,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { usePapers, useStats } from '@/hooks/useApi';
 import { useKnowledgeBase } from '@/contexts/KnowledgeBaseContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
@@ -57,8 +57,9 @@ interface DisplayPaper {
 }
 
 export default function Dataset() {
-  const { selectedKB, isDefaultSelected } = useKnowledgeBase();
-  const { accessToken } = useAuth();
+  const navigate = useNavigate();
+  const { selectedKB, isLoading: kbLoading } = useKnowledgeBase();
+  const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('');
@@ -66,40 +67,30 @@ export default function Dataset() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
-  // For default collection, use existing hooks
-  const { data: papersData, loading: defaultLoading, error: defaultError } = usePapers(
-    isDefaultSelected ? { limit: 500 } : undefined,
-    accessToken || undefined
-  );
-  const { data: defaultStats } = useStats(accessToken || undefined);
+  const [papers, setPapers] = useState<DisplayPaper[]>([]);
+  const [stats, setStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // For job collections, load manually
-  const [jobPapers, setJobPapers] = useState<DisplayPaper[]>([]);
-  const [jobStats, setJobStats] = useState<{ phases: Record<string, number>; topics: Record<string, number> } | null>(null);
-  const [jobLoading, setJobLoading] = useState(false);
-  const [jobError, setJobError] = useState<string | null>(null);
-
-  // Load job data when KB changes
+  // Anonymous visitors are welcome here as long as a public KB is
+  // available (the KnowledgeBaseContext only ever offers public jobs to
+  // anonymous sessions); only bounce to login when there's truly nothing
+  // to show.
   useEffect(() => {
-    if (!isDefaultSelected && selectedKB && accessToken) {
-      loadJobData();
+    if (!authLoading && !kbLoading && !isAuthenticated && !selectedKB) {
+      navigate('/login?redirect=/datasets');
     }
-  }, [selectedKB?.id, isDefaultSelected, accessToken]);
+  }, [authLoading, kbLoading, isAuthenticated, selectedKB, navigate]);
 
-  const loadJobData = async () => {
-    if (!selectedKB || isDefaultSelected) return;
+  const loadData = useCallback(async () => {
+    if (!selectedKB) return;
 
-    setJobLoading(true);
-    setJobError(null);
+    setLoading(true);
+    setError(null);
 
     try {
-      // Load documents and stats in parallel
-      const [docsResponse, statsResponse] = await Promise.all([
-        api.getJobDocuments(selectedKB.id as number, { limit: 500 }, accessToken || undefined),
-        api.getJobStats(selectedKB.id as number, accessToken || undefined),
-      ]);
-
-      setJobPapers(docsResponse.documents.map((doc: JobDocument) => ({
+      const docsResponse = await api.getJobDocuments(selectedKB.id, { limit: 500 }, accessToken || undefined);
+      setPapers(docsResponse.documents.map((doc: JobDocument) => ({
         doc_id: doc.doc_id,
         title: doc.title || doc.filename,
         authors: doc.authors || undefined,
@@ -108,14 +99,27 @@ export default function Dataset() {
         topic: doc.topic_category || undefined,
       })));
 
-      setJobStats({ phases: statsResponse.phases, topics: statsResponse.topics });
+      // Stats power the phase/topic filter dropdowns. Best-effort: some
+      // deployments may not expose this anonymously yet for public jobs, so
+      // a failure here just means the filters stay empty, not a page error.
+      try {
+        const statsResponse = await api.getJobStats(selectedKB.id, accessToken || undefined);
+        setStats({ phases: statsResponse.phases, topics: statsResponse.topics });
+      } catch (statsErr) {
+        console.error('Failed to load job stats:', statsErr);
+        setStats(null);
+      }
     } catch (err) {
-      console.error('Failed to load job data:', err);
-      setJobError(err instanceof Error ? err.message : 'Failed to load data');
+      console.error('Failed to load documents:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
-      setJobLoading(false);
+      setLoading(false);
     }
-  };
+  }, [selectedKB, accessToken]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Reset filters when KB changes
   useEffect(() => {
@@ -124,22 +128,6 @@ export default function Dataset() {
     setSearchQuery('');
     setCurrentPage(1);
   }, [selectedKB?.id]);
-
-  // Use appropriate data based on selected KB
-  const loading = isDefaultSelected ? defaultLoading : jobLoading;
-  const error = isDefaultSelected ? defaultError : jobError;
-  const stats = isDefaultSelected ? defaultStats : jobStats;
-
-  const papers: DisplayPaper[] = isDefaultSelected
-    ? (papersData?.papers || []).map(p => ({
-        doc_id: p.doc_id,
-        title: p.title,
-        authors: p.authors,
-        year: p.year,
-        phase: p.phase,
-        topic: p.topic,
-      }))
-    : jobPapers;
 
   // Filter papers based on search and filters
   const filteredPapers = papers.filter(paper => {
@@ -200,7 +188,7 @@ export default function Dataset() {
               <h1 className="text-2xl font-semibold text-white">Dataset</h1>
               {/* Show which KB is being viewed */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {isDefaultSelected ? (
+                {selectedKB?.isPublic ? (
                   <Database className="w-3 h-3" />
                 ) : (
                   <Folder className="w-3 h-3" />
