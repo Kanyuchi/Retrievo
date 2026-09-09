@@ -8,7 +8,7 @@
 2. Bulk-import feature (uploader lessons: token refresh, filename quoting, dedupe, progress) — OCR/queue/claim-limit items DONE
 2. Shaun: TheNerdsInt legal details (name, legal form, address, register court+number, VAT ID, managing director) → fill {{PLACEHOLDER}} tokens in legal pages
 3. Phase 3c (billing) when Stripe account exists; then Phase 5 differentiators (graph polish, low-bandwidth pass, chunking A/B with golden set)
-3. Phase 3c (billing): Stripe checkout/webhooks/portal + billing page — BLOCKED on Shaun creating the Stripe account (pricing locked: Free / €19 Pro / €25-seat Team, 3-seat min, academic discount); Paystack after
+3. Phase 3c BUILD (unblocked 2026-09-09): checkout sessions, webhook→plan_tier sync, billing page + Stripe portal, quota-error upgrade prompts, test-card E2E; then Paystack/Flutterwave
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon

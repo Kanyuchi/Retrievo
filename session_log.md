@@ -177,3 +177,8 @@
 - Demo jobs 19 (German transitions) + 21 (16 Personalities) flipped public; verified anonymously on prod: /api/jobs lists both (viewer), query returns results, chat answers grounded, DELETE → 401; browser: logged-out homepage shows demo switcher with Demo badge
 - Legacy global-collection endpoints now unused by the UI (kept, deprecated, graceful)
 - Ops note: scratchpad venv purged by tmp cleanup — DB ops now use the project venv
+
+## 2026-09-09 (evening) — Stripe unblocked: account, key, products live (test mode)
+- Shaun created the Stripe account (TheNerdsInt, DE, verified); first copy grabbed the key ID (mk_...) — Stripe's own error identified it; second copy = valid sk_test (107 chars), verified against API
+- Created via API: Humbowo Pro (€19/mo), Humbowo Team (€25/seat/mo), ACADEMIC50 coupon (50% forever); price IDs in .env
+- Phase 3c (billing build: checkout, webhook→plan_tier, billing page, portal) now fully unblocked
