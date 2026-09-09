@@ -3,7 +3,8 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), live as **Humbowo** at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
-1. Retrieval quality vs baseline (recall@5 0.50/MRR 0.50 on thesis corpus): Cohere reranker (needs key), chunking A/B — measured via scripts/run_semantic_eval.py
+1. Remove deprecated legacy endpoints + old chroma/BM25-pickle code paths after a soak period
+2. Retrieval quality vs baseline (recall@5 0.50/MRR 0.50 on thesis corpus): Cohere reranker (needs key), chunking A/B — measured via scripts/run_semantic_eval.py
 2. Bulk-import feature (uploader lessons: token refresh, filename quoting, dedupe, progress) — OCR/queue/claim-limit items DONE
 2. Shaun: TheNerdsInt legal details (name, legal form, address, register court+number, VAT ID, managing director) → fill {{PLACEHOLDER}} tokens in legal pages
 3. Phase 3c (billing) when Stripe account exists; then Phase 5 differentiators (graph polish, low-bandwidth pass, chunking A/B with golden set)
@@ -11,7 +12,7 @@
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
-- Point the public demo experience at a demo workspace (retire legacy global collection properly) — audit RC2's real fix
+
 - Audit leftovers: drawer clipping/Escape, DialogTitle a11y warning, Google Drive OAuth 400, data-source save validation
 - Re-enable (wired) or delete stubbed pages: Model Providers, MCP, Team, Agents
 - Consider Claude Haiku 4.5 / Sonnet 5 for chat synthesis (best citation faithfulness; Groq free tier is the launch default)
@@ -30,6 +31,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-09: Phase 6 — bulk-import queue UI + public workspaces (anonymous demo browsing live, legacy collection retired from UI)
 - 2026-09-04: 16 Personalities showcase KB (48 docs, graph 298 entities/7 clusters, cross-type cited chat verified)
 - 2026-09-03: Thesis corpus (56 papers) live in "Thesis Literature — Regional Transitions" KB; real eval baseline recall@5 0.50 / MRR 0.50; insights+graph built; invite minted
 - 2026-09-02: Phase 5 round 2 — semantic eval harness (recall 1.0/MRR 1.0 baseline on demo corpus), json-fence parse fix unlocking knowledge graph (0→139 entities), graph UI polish shipped

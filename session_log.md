@@ -170,3 +170,10 @@
 - OCR end-to-end victories: Grabher (66 chunks), Bell's 500-page Coming of Post-Industrial Society (77 chunks — outlasted the poller, 2h rq timeout held), Weakness of Strong Ties (final straggler) — all indexed
 - Thesis KB final: 59 docs; every extractable page of the corpus is searchable, including scanned books
 - Fresh working invite link issued post-RC1-fix
+
+## 2026-09-08→09 — Phase 6 live: bulk import + workspace-backed public demo
+- Backend (agent, 96 tests): Job.is_public column+migration; membership grants implicit viewer on public jobs incl. anonymous (401 for anon-denied vs 403); ~9 read routes optional-auth; anonymous /api/jobs lists only public; PATCH is_public owner toggle; quota increments skipped for anonymous; I patched the job-detail route the agent flagged as missed
+- Frontend (agent, died on network error at the finish line — I removed 2 unused vars, verified lint/build, committed): bulk-import queue in the upload dialog (per-file status chips, normalized dedupe with re-import override, concurrency 2, retry/cancel, summary toast); legacy "Public Demo Collection" replaced with real public workspaces; Home/Dataset/Files/Search/Chat now job-scoped; anonymous read-only browsing
+- Demo jobs 19 (German transitions) + 21 (16 Personalities) flipped public; verified anonymously on prod: /api/jobs lists both (viewer), query returns results, chat answers grounded, DELETE → 401; browser: logged-out homepage shows demo switcher with Demo badge
+- Legacy global-collection endpoints now unused by the UI (kept, deprecated, graceful)
+- Ops note: scratchpad venv purged by tmp cleanup — DB ops now use the project venv

@@ -29,6 +29,9 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 ## Product capabilities (selected)
 - Team workspaces (2026-09-02): KBs shareable via invite links; roles viewer/editor/owner enforced on all routes; owner's plan pays storage quotas
 
+## Public demo
+- Workspaces 19 (German Regional Transitions) + 21 (16 Personalities) are is_public: anonymous visitors browse, search, and chat read-only; legacy global collection retired from the UI (2026-09-09)
+
 ## Trust & compliance
 - Deletion: KB delete + account delete are complete purges (vectors, files, graph, chat, members, invites) — prod-verified 2026-09-02
 - Public pages: /legal/privacy, /legal/impressum, /legal/dpa, /trust — placeholders pending TheNerdsInt legal details
