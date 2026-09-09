@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
 import { api } from '../lib/api';
 import type { Job } from '../lib/api';
+import { isQuotaError } from '../lib/quotaError';
 import {
   Plus,
   Folder,
@@ -62,6 +63,15 @@ function CreateJobModal({ isOpen, onClose, onCreate }: CreateJobModalProps) {
         {error && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
             <p className="text-sm text-destructive">{error}</p>
+            {isQuotaError(error) && (
+              <Link
+                to="/settings/billing"
+                onClick={onClose}
+                className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+              >
+                {t('billing.upgrade_cta')}
+              </Link>
+            )}
           </div>
         )}
 

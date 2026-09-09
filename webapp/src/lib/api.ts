@@ -429,6 +429,21 @@ export interface WorkspaceMember {
   role: string;
 }
 
+// Billing (Stripe) interfaces
+export interface BillingStatusResponse {
+  plan_tier: 'free' | 'pro' | 'enterprise';
+  has_customer: boolean;
+  subscription_id: string | null;
+}
+
+export interface BillingCheckoutResponse {
+  url: string;
+}
+
+export interface BillingPortalResponse {
+  url: string;
+}
+
 export interface JobChatResponse {
   question: string;
   answer: string;
@@ -1516,6 +1531,52 @@ class ApiClient {
       method: 'PATCH',
       headers,
       body: JSON.stringify(payload),
+    });
+  }
+
+  // ============================================
+  // Billing (Stripe) Methods
+  // ============================================
+
+  // Current plan tier + whether a Stripe customer exists yet
+  async getBillingStatus(accessToken?: string): Promise<BillingStatusResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/billing/status', { headers });
+  }
+
+  // Create a Stripe Checkout session for a subscription plan
+  async createCheckout(
+    plan: 'pro' | 'team',
+    seats?: number,
+    academic?: boolean,
+    accessToken?: string
+  ): Promise<BillingCheckoutResponse> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const body: Record<string, unknown> = { plan };
+    if (seats !== undefined) body.seats = seats;
+    if (academic !== undefined) body.academic = academic;
+    return this.fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Create a Stripe customer billing portal session (400 if no customer yet)
+  async createPortalSession(accessToken?: string): Promise<BillingPortalResponse> {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return this.fetch('/api/billing/portal', {
+      method: 'POST',
+      headers,
     });
   }
 }

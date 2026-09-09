@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import type { Job, JobDocument, JobStats, UploadConfigResponse, RelatedDocumentInfo, WorkspaceMember } from '../lib/api';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/lib/toast';
+import { isQuotaError } from '@/lib/quotaError';
 import {
   ArrowLeft,
   Upload,
@@ -1147,7 +1148,17 @@ export default function JobDetail() {
                             {formatFileSize(item.file.size)}
                           </p>
                           {item.status === 'failed' && item.error && (
-                            <p className="text-xs text-destructive">{item.error}</p>
+                            <div>
+                              <p className="text-xs text-destructive">{item.error}</p>
+                              {isQuotaError(item.error) && (
+                                <Link
+                                  to="/settings/billing"
+                                  className="text-xs font-medium text-primary hover:underline"
+                                >
+                                  {t('billing.upgrade_cta')}
+                                </Link>
+                              )}
+                            </div>
                           )}
                           {item.status === 'done' && item.result && (
                             <p className="text-xs text-green-500">

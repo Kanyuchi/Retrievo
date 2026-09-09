@@ -7,7 +7,8 @@ import {
   Moon,
   LogOut,
   ChevronRight,
-  Home
+  Home,
+  CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +22,7 @@ const menuItems = [
   // disabled: stub — see 2026-09-05 audit (all controls inert, mock "joined teams" row)
   // { path: '/settings/team', label: 'Team', icon: Users },
   { path: '/settings/profile', label: 'Profile', icon: User },
+  { path: '/settings/billing', label: 'Billing', icon: CreditCard },
 ];
 
 export default function SettingsSidebar() {

@@ -27,6 +27,7 @@ import DataSources from './pages/settings/DataSources';
 // disabled: stub — see 2026-09-05 audit (all controls inert, mock "joined teams" row)
 // import Team from './pages/settings/Team';
 import Profile from './pages/settings/Profile';
+import BillingPage from './pages/settings/BillingPage';
 import NotFound from './pages/NotFound';
 import Privacy from './pages/legal/Privacy';
 import Impressum from './pages/legal/Impressum';
@@ -126,6 +127,7 @@ function App() {
               {/* <Route path="/settings/mcp" element={<MCP />} /> */}
               {/* <Route path="/settings/team" element={<Team />} /> */}
               <Route path="/settings/profile" element={<Profile />} />
+              <Route path="/settings/billing" element={<BillingPage />} />
               {/* Legal & trust pages (public, no auth) */}
               <Route path="/legal/privacy" element={<Privacy />} />
               <Route path="/legal/impressum" element={<Impressum />} />
