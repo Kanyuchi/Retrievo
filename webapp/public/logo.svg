@@ -1,0 +1,16 @@
+<svg width="240" height="48" viewBox="0 0 240 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon tile: [H] citation-bracket mark -->
+  <rect x="0" y="8" width="32" height="32" rx="7" fill="#0E3A3A"/>
+  <g stroke="#5EE0C8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M9.5 16 H7 V32 H9.5"/>
+    <path d="M22.5 16 H25 V32 H22.5"/>
+  </g>
+  <g stroke="#F4F1EA" stroke-width="2.6" stroke-linecap="round">
+    <path d="M13 17 V31"/>
+    <path d="M19 17 V31"/>
+    <path d="M13 24 H19"/>
+  </g>
+  <!-- Wordmark with a proof superscript -->
+  <text x="44" y="33" font-family="Fraunces, Georgia, serif" font-size="26" font-weight="600" fill="#0E3A3A">Humbowo</text>
+  <text x="196" y="20" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="500" fill="#0E9C7E">[1]</text>
+</svg>
