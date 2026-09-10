@@ -17,6 +17,13 @@ services:
       # Redis (queue, rate limiting, OAuth state)
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
 
+      # Stripe billing
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO:-}
+      - STRIPE_PRICE_TEAM=${STRIPE_PRICE_TEAM:-}
+      - STRIPE_COUPON_ACADEMIC=${STRIPE_COUPON_ACADEMIC:-}
+
       # AWS S3 Configuration
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-lit-rag-flow}
       - AWS_REGION=${AWS_REGION:-eu-north-1}
