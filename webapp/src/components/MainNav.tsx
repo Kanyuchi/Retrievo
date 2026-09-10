@@ -63,14 +63,25 @@ export default function MainNav() {
         <div className="flex items-center gap-4 shrink-0">
           <Link to="/" className="flex items-center gap-3 group">
             <motion.div
-              className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center"
+              className="w-10 h-10 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: '#0E3A3A' }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              {/* [H] citation-bracket mark — Humbowo */}
+              <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+                <g stroke="#5EE0C8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9.5 8 H7 V24 H9.5" />
+                  <path d="M22.5 8 H25 V24 H22.5" />
+                </g>
+                <g stroke="#F4F1EA" strokeWidth="2.6" strokeLinecap="round">
+                  <path d="M13 9 V23" />
+                  <path d="M19 9 V23" />
+                  <path d="M13 16 H19" />
+                </g>
               </svg>
             </motion.div>
+            <span className="hidden sm:inline font-semibold text-lg tracking-tight" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>Humbowo</span>
           </Link>
 
           {/* Knowledge Base Selector */}
