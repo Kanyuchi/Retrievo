@@ -274,7 +274,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         _apply_plan_from_metadata(db, dict(metadata), subscription_id)
         logger.info(f"Webhook handled: {event_type}")
 
-    elif event_type == "customer.subscription.updated":
+    elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
         metadata = _get(data_object, "metadata", {}) or {}
         sub_status = _get(data_object, "status")
         subscription_id = _get(data_object, "id")
