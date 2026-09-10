@@ -78,6 +78,10 @@ class User(Base):
     # Plan & Quotas
     plan_tier = Column(String(50), default="free")  # free, pro, enterprise
 
+    # Stripe billing linkage
+    stripe_customer_id = Column(String(255), nullable=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+
     # Usage tracking (for daily API limits)
     api_calls_today = Column(Integer, default=0)
     last_api_call_date = Column(DateTime, nullable=True)
@@ -659,6 +663,19 @@ def _run_migrations():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE default_documents ADD COLUMN doi VARCHAR(255)"))
             logger.info("Migration complete: doi added")
+
+    if inspector.has_table("users"):
+        columns = [col["name"] for col in inspector.get_columns("users")]
+        if "stripe_customer_id" not in columns:
+            logger.info("Migrating: adding stripe_customer_id column to users table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(255)"))
+            logger.info("Migration complete: stripe_customer_id added")
+        if "stripe_subscription_id" not in columns:
+            logger.info("Migrating: adding stripe_subscription_id column to users table")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN stripe_subscription_id VARCHAR(255)"))
+            logger.info("Migration complete: stripe_subscription_id added")
 
 
 def get_db() -> Session:

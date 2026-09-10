@@ -364,11 +364,13 @@ _CSRF_EXEMPT_PATHS = {
     "/api/auth/register",
     "/api/auth/oauth/google/callback",
     "/api/auth/oauth/github/callback",
+    "/api/billing/webhook",
     # Without /api/ prefix (nginx strips it)
     "/auth/login",
     "/auth/register",
     "/auth/oauth/google/callback",
     "/auth/oauth/github/callback",
+    "/billing/webhook",
 }
 
 
@@ -457,6 +459,7 @@ from .routers.chats import router as chats_router
 from .routers.insights import router as insights_router
 from .routers.graph import router as graph_router
 from .routers.data_sources import router as data_sources_router
+from .routers.billing import router as billing_router
 
 app.include_router(auth_router)
 app.include_router(jobs_router)
@@ -464,6 +467,7 @@ app.include_router(chats_router)
 app.include_router(insights_router)
 app.include_router(graph_router)
 app.include_router(data_sources_router)
+app.include_router(billing_router)
 
 
 # ============================================================================
