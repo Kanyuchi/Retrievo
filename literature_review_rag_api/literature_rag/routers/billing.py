@@ -268,25 +268,33 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             return obj.get(key, default)
         return getattr(obj, key, default)
 
+    def _meta_dict(obj):
+        m = _get(obj, "metadata", {}) or {}
+        if hasattr(m, "to_dict_recursive"):
+            return m.to_dict_recursive()
+        if hasattr(m, "to_dict"):
+            return m.to_dict()
+        return dict(m) if not isinstance(m, dict) else m
+
     if event_type == "checkout.session.completed":
-        metadata = _get(data_object, "metadata", {}) or {}
+        metadata = _meta_dict(data_object)
         subscription_id = _get(data_object, "subscription")
-        _apply_plan_from_metadata(db, dict(metadata), subscription_id)
+        _apply_plan_from_metadata(db, metadata, subscription_id)
         logger.info(f"Webhook handled: {event_type}")
 
     elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
-        metadata = _get(data_object, "metadata", {}) or {}
+        metadata = _meta_dict(data_object)
         sub_status = _get(data_object, "status")
         subscription_id = _get(data_object, "id")
         if sub_status == "active":
-            _apply_plan_from_metadata(db, dict(metadata), subscription_id)
+            _apply_plan_from_metadata(db, metadata, subscription_id)
             logger.info(f"Webhook handled: {event_type} (status=active)")
         else:
             # past_due/unpaid/incomplete etc: leave tier as-is, just log.
             logger.info(f"Webhook ignored (no tier change): {event_type} (status={sub_status})")
 
     elif event_type == "customer.subscription.deleted":
-        metadata = _get(data_object, "metadata", {}) or {}
+        metadata = _meta_dict(data_object)
         user_id = metadata.get("user_id") if metadata else None
         if user_id:
             user = db.query(User).filter(User.id == int(user_id)).first()
