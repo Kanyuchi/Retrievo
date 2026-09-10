@@ -31,6 +31,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-10: Brand identity (Citation-Bracket logo, favicons, OG image) + market-grade evidence-first landing page live
 - 2026-09-10: Phase 3c — Stripe billing live & E2E-verified (checkout/portal/webhook plan sync); ORIGINAL ROADMAP COMPLETE (Phases 0–6)
 - 2026-09-09: Phase 6 — bulk-import queue UI + public workspaces (anonymous demo browsing live, legacy collection retired from UI)
 - 2026-09-04: 16 Personalities showcase KB (48 docs, graph 298 entities/7 clusters, cross-type cited chat verified)

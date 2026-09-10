@@ -29,6 +29,10 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 ## Product capabilities (selected)
 - Team workspaces (2026-09-02): KBs shareable via invite links; roles viewer/editor/owner enforced on all routes; owner's plan pays storage quotas
 
+## Brand & marketing site
+- Logo: [H] citation-bracket mark + Fraunces wordmark (public/logo.svg, favicon.svg + PNG rasters, og-image.png); brand story = Humbowo = Shona "evidence/proof"
+- Landing page: evidence-first, warm-parchment/teal editorial (Home.tsx + home-landing.css + LiveProofPanel.tsx); competitor-researched, live 2026-09-10
+
 ## Billing
 - Stripe live (test mode): Pro €19/mo, Team €25/seat/mo (3-seat min), ACADEMIC50 coupon; checkout + portal + webhook→plan_tier verified on prod. Go-live = Stripe activation + sk_live swap.
 

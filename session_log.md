@@ -190,3 +190,11 @@
 - PROD E2E VERIFIED (test mode): checkout session → Stripe-hosted page 200; test subscription w/ metadata → webhook flips account free→pro in real time; cancellation → pro→free. Test user + Stripe customer purged
 - Going live later: complete Stripe activation, recreate products in live mode, swap sk_live key (one env change) — Paystack/Flutterwave for African mobile money still queued
 - ROADMAP COMPLETE: Phases 0,1,2a,2b,3a,3b,3c,4,5,6 all live and verified
+
+## 2026-09-10 (evening) — Brand identity + market-grade landing page
+- Diagnosed the blank-tab/generic-Google-listing: no favicon, no logo, no meta description/OG tags at all
+- Logo: Shaun chose "Citation Bracket" concept → [H] mark (H framed by citation brackets) + Fraunces wordmark with [1] proof-superscript, deep-teal/ink. Brand spine = "Humbowo is Shona for evidence/proof" (from Google's own AI overview)
+- Assets: favicon.svg + 32/180/512 PNG rasters (rendered via headless browser canvas — no CLI rasterizer available) + logo.svg + designed 1200x630 og-image.png; full meta/OG/Twitter tags + theme-color in index.html; [H] mark swapped into MainNav header (was a generic gradient layers icon)
+- Homepage: rebuilt from real competitor research (Glean/NotebookLM/Perplexity/Elicit/Hebbia/Onyx/Humata/AnythingLLM fetched live). Warm-parchment + deep-teal editorial palette (Fraunces/Public Sans/IBM Plex Mono), H1 "Every answer, with its proof.", animated "Exhibit A — live query" proof panel with expandable [1][2] citation chips, 3-step how-it-works, 6 feature cards, 3 use-case cards, EU-security section, 3-tier pricing teaser, final CTA, footer "Humbowo is Shona for evidence". Auth-aware CTAs; anonymous "Try the live demo" routes into a public demo KB
+- Honesty catch: agent flagged that "embeddings never leave the EU" contradicts the Trust page (embeddings/chat via US APIs) → softened to "documents & search indices stored in EU" — kept accurate
+- Verified live in browser (all sections render; header logo shows); shipped. Google listing updates on its own crawl schedule
