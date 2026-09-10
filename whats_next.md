@@ -8,7 +8,7 @@
 2. Bulk-import feature (uploader lessons: token refresh, filename quoting, dedupe, progress) — OCR/queue/claim-limit items DONE
 2. Shaun: TheNerdsInt legal details (name, legal form, address, register court+number, VAT ID, managing director) → fill {{PLACEHOLDER}} tokens in legal pages
 3. Phase 3c (billing) when Stripe account exists; then Phase 5 differentiators (graph polish, low-bandwidth pass, chunking A/B with golden set)
-3. Phase 3c BUILD (unblocked 2026-09-09): checkout sessions, webhook→plan_tier sync, billing page + Stripe portal, quota-error upgrade prompts, test-card E2E; then Paystack/Flutterwave
+3. Go-live on billing: Stripe account activation (business verification + IBAN) → recreate products in live mode → swap sk_live_ key; then Paystack/Flutterwave for African mobile money
 4. Uptime monitoring (UptimeRobot or similar, needs account) on https://humbowo.com/api/healthz
 
 ## Soon
@@ -31,6 +31,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-10: Phase 3c — Stripe billing live & E2E-verified (checkout/portal/webhook plan sync); ORIGINAL ROADMAP COMPLETE (Phases 0–6)
 - 2026-09-09: Phase 6 — bulk-import queue UI + public workspaces (anonymous demo browsing live, legacy collection retired from UI)
 - 2026-09-04: 16 Personalities showcase KB (48 docs, graph 298 entities/7 clusters, cross-type cited chat verified)
 - 2026-09-03: Thesis corpus (56 papers) live in "Thesis Literature — Regional Transitions" KB; real eval baseline recall@5 0.50 / MRR 0.50; insights+graph built; invite minted

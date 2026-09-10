@@ -182,3 +182,11 @@
 - Shaun created the Stripe account (TheNerdsInt, DE, verified); first copy grabbed the key ID (mk_...) — Stripe's own error identified it; second copy = valid sk_test (107 chars), verified against API
 - Created via API: Humbowo Pro (€19/mo), Humbowo Team (€25/seat/mo), ACADEMIC50 coupon (50% forever); price IDs in .env
 - Phase 3c (billing build: checkout, webhook→plan_tier, billing page, portal) now fully unblocked
+
+## 2026-09-10 — Phase 3c LIVE: Stripe billing end-to-end (final roadmap phase)
+- Backend billing router (111 tests): checkout, portal, status, signature-verified webhook → plan_tier sync; frontend billing page (plan cards, seat stepper, academic checkbox, portal, quota-error upsell links)
+- Webhook endpoint registered with Stripe (4 events incl. subscription.created)
+- Three deploy-blockers fixed in sequence, each real: (1) 21GB of accumulated build layers → out-of-disk (docker system prune -af, now part of deploy hygiene); (2) Stripe env vars not passed to container (compose passthrough added); (3) StripeObject.metadata.get() crash — normalized via _meta_dict/to_dict_recursive
+- PROD E2E VERIFIED (test mode): checkout session → Stripe-hosted page 200; test subscription w/ metadata → webhook flips account free→pro in real time; cancellation → pro→free. Test user + Stripe customer purged
+- Going live later: complete Stripe activation, recreate products in live mode, swap sk_live key (one env change) — Paystack/Flutterwave for African mobile money still queued
+- ROADMAP COMPLETE: Phases 0,1,2a,2b,3a,3b,3c,4,5,6 all live and verified

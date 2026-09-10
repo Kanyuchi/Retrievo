@@ -29,6 +29,9 @@ Retrievo — a multi-tenant retrieval/RAG platform (FastAPI + ChromaDB backend, 
 ## Product capabilities (selected)
 - Team workspaces (2026-09-02): KBs shareable via invite links; roles viewer/editor/owner enforced on all routes; owner's plan pays storage quotas
 
+## Billing
+- Stripe live (test mode): Pro €19/mo, Team €25/seat/mo (3-seat min), ACADEMIC50 coupon; checkout + portal + webhook→plan_tier verified on prod. Go-live = Stripe activation + sk_live swap.
+
 ## Public demo
 - Workspaces 19 (German Regional Transitions) + 21 (16 Personalities) are is_public: anonymous visitors browse, search, and chat read-only; legacy global collection retired from the UI (2026-09-09)
 
