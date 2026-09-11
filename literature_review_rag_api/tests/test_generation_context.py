@@ -271,6 +271,27 @@ def make_hybrid_pipeline():
     return pipeline, client
 
 
+def test_sources_include_grounding_snippet():
+    """Inspectable citations: every returned source must carry a 'snippet'
+    field that is the actual passage text from its originating chunk, not
+    just title/authors/year metadata."""
+    pipeline, client = make_pipeline()
+
+    result = pipeline.run(question="What is the employment figure?", n_sources=3)
+
+    assert result["sources"], "expected at least one cited source"
+    for source in result["sources"]:
+        assert "snippet" in source, "source must include a 'snippet' field"
+        snippet = source["snippet"]
+        assert snippet, "snippet must be non-empty"
+        assert snippet in CONTENT, (
+            "snippet must be a substring of the originating chunk's content"
+        )
+        # 'page' and 'section' keys must exist (may be None -- never fabricated)
+        assert "page" in source
+        assert "section" in source
+
+
 def test_hybrid_fusion_survives_trim_to_n_sources():
     """The BM25-preferred, answer-bearing chunk must not be silently dropped
     by dense-only re-ranking when the candidate pool is trimmed to n_sources."""

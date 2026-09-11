@@ -536,7 +536,10 @@ class AgenticRAGPipeline:
                 "authors": meta.get("authors", "Unknown"),
                 "year": meta.get("year", "n.d."),
                 "title": meta.get("title", "Untitled"),
-                "doc_id": meta.get("doc_id", "")
+                "doc_id": meta.get("doc_id", ""),
+                "snippet": (chunk.get("content") or "").strip()[:320],
+                "page": meta.get("page") if meta.get("page") is not None else meta.get("page_number"),
+                "section": meta.get("section_type")
             })
 
         return answer, sources
