@@ -28,8 +28,7 @@ type Token =
 
 const REVEAL_MS = 16; // per character
 const CITE_PAUSE_MS = 260; // extra pause when a citation chip pops in
-const HOLD_MS = 4200; // how long the finished answer stays fully visible
-const RESTART_FADE_MS = 350;
+const PROOF_REVEAL_MS = 650; // beat before auto-opening the first source
 
 /**
  * Animated, self-contained sample Q&A for the hero. This is NOT a live
@@ -37,6 +36,11 @@ const RESTART_FADE_MS = 350;
  * citation chips that expand to a source snippet on hover/click. Keeping it
  * fake keeps the hero instant and reliable; the real product is one click
  * away via `onTryLive`.
+ *
+ * The answer types ONCE and then rests fully revealed — it never loops back
+ * to a partial state, so the hero of a "proof" product is never caught
+ * mid-answer. When typing finishes it auto-opens the first citation's source
+ * snippet, actively demonstrating that every citation is inspectable.
  */
 export default function LiveProofPanel({
   eyebrow,
@@ -67,11 +71,15 @@ export default function LiveProofPanel({
       !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
   const [revealed, setRevealed] = useState(() => (reducedMotion ? tokens.length : 0));
-  const [phase, setPhase] = useState<'typing' | 'done' | 'fading'>(
+  const [phase, setPhase] = useState<'typing' | 'done'>(
     () => (reducedMotion ? 'done' : 'typing')
   );
   const [activeCite, setActiveCite] = useState<number | null>(null);
-  const [pinnedCite, setPinnedCite] = useState<number | null>(null);
+  // Reduced-motion users see the finished answer immediately, so open the
+  // first source right away to demonstrate inspectable citations.
+  const [pinnedCite, setPinnedCite] = useState<number | null>(
+    () => (reducedMotion ? citations[0]?.id ?? null : null)
+  );
 
   useEffect(() => {
     if (reducedMotion) {
@@ -82,35 +90,29 @@ export default function LiveProofPanel({
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    const runCycle = (from: number) => {
+    const step = (from: number) => {
       if (cancelled) return;
       if (from >= tokens.length) {
+        // Type once, then rest — never re-type into a partial state.
         setPhase('done');
         timer = setTimeout(() => {
           if (cancelled) return;
-          setPhase('fading');
-          timer = setTimeout(() => {
-            if (cancelled) return;
-            setRevealed(0);
-            setPinnedCite(null);
-            setActiveCite(null);
-            setPhase('typing');
-            timer = setTimeout(() => runCycle(0), RESTART_FADE_MS);
-          }, RESTART_FADE_MS);
-        }, HOLD_MS);
+          // Auto-open the first source: show the proof, don't hide it.
+          setPinnedCite((prev) => prev ?? (citations[0]?.id ?? null));
+        }, PROOF_REVEAL_MS);
         return;
       }
       const isCite = tokens[from]?.kind === 'cite';
       setRevealed(from + 1);
-      timer = setTimeout(() => runCycle(from + 1), isCite ? CITE_PAUSE_MS : REVEAL_MS);
+      timer = setTimeout(() => step(from + 1), isCite ? CITE_PAUSE_MS : REVEAL_MS);
     };
 
-    runCycle(0);
+    step(0);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [tokens, reducedMotion]);
+  }, [tokens, reducedMotion, citations]);
 
   const citationById = useMemo(() => {
     const map = new Map<number, ProofCitation>();
@@ -131,10 +133,7 @@ export default function LiveProofPanel({
         {eyebrow}
       </div>
 
-      <div
-        className="rounded-2xl border border-[var(--hb-border)] bg-[var(--hb-surface)] shadow-[0_18px_50px_-25px_rgba(11,79,74,0.45)]"
-        style={{ opacity: phase === 'fading' ? 0 : 1, transition: `opacity ${RESTART_FADE_MS}ms ease` }}
-      >
+      <div className="rounded-2xl border border-[var(--hb-border)] bg-[var(--hb-surface)] shadow-[0_18px_50px_-25px_rgba(11,79,74,0.45)]">
         <div className="flex items-center justify-between border-b border-[var(--hb-border)] px-5 py-3">
           <span className="text-[11px] uppercase tracking-[0.14em] text-[var(--hb-ink-soft)]">
             Exhibit A — live query
@@ -176,7 +175,7 @@ export default function LiveProofPanel({
                 </button>
               );
             })}
-            {phase !== 'done' && phase !== 'fading' && (
+            {phase !== 'done' && (
               <span className="hb-caret ml-0.5 inline-block h-[13px] w-[2px] -translate-y-0.5 bg-[var(--hb-deep)] align-middle" />
             )}
           </p>
