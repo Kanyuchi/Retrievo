@@ -43,6 +43,19 @@ const itemVariants = {
   },
 };
 
+// Some documents carry a technical section placeholder (e.g. "full_text"
+// means the doc was ingested as a single block, not split into real
+// sections). Showing those as a "section" label is meaningless noise, so
+// we suppress them and only surface genuine section names.
+const PLACEHOLDER_SECTIONS = new Set([
+  'full_text', 'fulltext', 'unknown', 'body', 'text', 'content', 'n/a', 'none', 'default', '',
+]);
+function meaningfulSection(section?: string | null): string | null {
+  if (!section) return null;
+  const norm = section.trim().toLowerCase();
+  return PLACEHOLDER_SECTIONS.has(norm) ? null : section;
+}
+
 interface MessageSource {
   citation_number: number;
   authors: string;
@@ -717,13 +730,17 @@ export default function Chat() {
                                             {t('chat.no_snippet')}
                                           </p>
                                         )}
-                                        {(source.page != null || source.section) && (
-                                          <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                            {source.page != null && t('chat.page_label', { page: source.page })}
-                                            {source.page != null && source.section && ' · '}
-                                            {source.section}
-                                          </p>
-                                        )}
+                                        {(() => {
+                                          const shownSection = meaningfulSection(source.section);
+                                          if (source.page == null && !shownSection) return null;
+                                          return (
+                                            <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                              {source.page != null && t('chat.page_label', { page: source.page })}
+                                              {source.page != null && shownSection && ' · '}
+                                              {shownSection}
+                                            </p>
+                                          );
+                                        })()}
                                       </div>
                                     )}
                                   </div>

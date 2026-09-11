@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-09-11 — Verified anonymous demo chat + citation polish (bold render, drop `full_text` label)
+- Browser-verified the just-shipped inspectable-citations work end-to-end as an ANONYMOUS visitor: navigated to https://humbowo.com/chats (16 Personalities demo auto-selected), asked a real question, got an answer in ~6s with inline clickable `[n]` chips, and clicking a chip expands the exact grounding passage — no login wall. The earlier "/chats → /login?redirect=/jobs" bounce did not reproduce; it was a transient KB-context race (guard only redirects when `!selectedKB` after load), and the public demo now resolves and stays chattable without an account.
+- Fixed literal markdown: LLM answers emit `**bold**`, which rendered as raw asterisks. `CitedAnswer.tsx` now renders `**bold**` → `<strong>` in the plain-text segments (bold only — the sole marker that appears), leaving citation-chip splitting intact.
+- Fixed noise in the citation panel: docs carry `section = "full_text"` (a technical placeholder meaning "ingested as one block"), which showed as a meaningless "section" label. `Chat.tsx` now suppresses placeholder sections (full_text/unknown/body/text/content/n_a/none/default) and only surfaces genuine section names.
+- Smoke test: `npm run build` clean (tsc + vite), rsync-deployed `webapp/dist` → `/var/www/humbowo`, re-ran the query live — bold renders, no `full_text`, passage still expands. Both authorized critique fixes (#1 hero types-once, #2 inspectable citations) now confirmed live.
+- Note: `/api/jobs/{id}/stats` still 401s for anonymous on a public job (doc/chunk counts come from KB context instead, so the page is fine); left as-is. #3 (EU-resident inference) remains the user's decision — NOT started.
+
 ## 2026-09-01 — Project state audit after ~3.5-month gap; humbowo.com migration kickoff
 - Read repo + git history to reconstruct state (last commit was 2026-05-18; 146 commits total since 2026-01-24)
 - Pushed the one unpushed docs commit (`d972533`) to origin/main

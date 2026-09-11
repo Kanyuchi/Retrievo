@@ -17,6 +17,21 @@ interface CitedAnswerProps {
 }
 
 const CITATION_PATTERN = /(\[\d+\])/g;
+const BOLD_PATTERN = /(\*\*[^*]+\*\*)/g;
+
+/**
+ * Lightweight inline formatting for a plain-text segment: the LLM emits
+ * `**bold**` markers, which would otherwise show as literal asterisks. We
+ * render only bold (the sole marker that appears in answers) and leave all
+ * other text untouched so this can never mangle unexpected content.
+ */
+function renderText(text: string, keyPrefix: string) {
+  return text.split(BOLD_PATTERN).map((seg, i) => {
+    const bold = seg.match(/^\*\*([^*]+)\*\*$/);
+    if (bold) return <strong key={`${keyPrefix}-${i}`}>{bold[1]}</strong>;
+    return <span key={`${keyPrefix}-${i}`}>{seg}</span>;
+  });
+}
 
 /**
  * Renders an assistant answer with inline, clickable citation chips.
@@ -63,7 +78,7 @@ export default function CitedAnswer({
             );
           }
         }
-        return <span key={idx}>{part}</span>;
+        return <span key={idx}>{renderText(part, String(idx))}</span>;
       })}
     </p>
   );
