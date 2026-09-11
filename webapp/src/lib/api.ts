@@ -74,6 +74,9 @@ export interface ChatResponse {
     year: number | string;
     title: string;
     doc_id: string;
+    snippet?: string;
+    page?: number | string | null;
+    section?: string | null;
   }>;
   complexity: 'simple' | 'medium' | 'complex';
   pipeline_stats: PipelineStats;
@@ -453,6 +456,9 @@ export interface JobChatResponse {
     year: number | string;
     title: string;
     doc_id: string;
+    snippet?: string;
+    page?: number | string | null;
+    section?: string | null;
   }>;
   complexity: 'simple' | 'medium' | 'complex';
   pipeline_stats: PipelineStats;

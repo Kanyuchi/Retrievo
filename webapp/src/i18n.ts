@@ -402,6 +402,9 @@ const resources = {
         ask_question: 'Ask a question about {{name}}...',
         the_literature: 'the literature',
         session_label: 'Session {{label}}',
+        page_label: 'p. {{page}}',
+        no_snippet: 'Source passage not available for this citation',
+        view_source: 'View source {{number}}',
       },
       search: {
         title: 'Search',
@@ -873,6 +876,9 @@ const resources = {
         ask_question: 'Stelle eine Frage zu {{name}}...',
         the_literature: 'der Literatur',
         session_label: 'Sitzung {{label}}',
+        page_label: 'S. {{page}}',
+        no_snippet: 'Für dieses Zitat ist keine Quellstelle verfügbar',
+        view_source: 'Quelle {{number}} ansehen',
       },
       search: {
         title: 'Suche',

@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import type { PipelineStats } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import CitedAnswer from '@/components/CitedAnswer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,14 +43,22 @@ const itemVariants = {
   },
 };
 
+interface MessageSource {
+  citation_number: number;
+  authors: string;
+  year: number | string;
+  title: string;
+  doc_id: string;
+  snippet?: string;
+  page?: number | string | null;
+  section?: string | null;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{
-    title: string;
-    score: number;
-  }>;
+  sources?: MessageSource[];
   complexity?: 'simple' | 'medium' | 'complex';
   pipelineStats?: PipelineStats;
 }
@@ -66,6 +75,13 @@ export default function Chat() {
   const [sessions, setSessions] = useState<Array<{ id: number; title?: string | null; created_at: string; updated_at: string }>>([]);
   const [activeSession, setActiveSession] = useState<{ id: number; title?: string | null; created_at: string; updated_at: string } | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+  // Inspectable citations: which source (per message) is currently expanded,
+  // and a brief "just jumped here" flash so clicking an inline chip visibly
+  // lands the reader on the right source card.
+  const [activeCitations, setActiveCitations] = useState<Record<string, number | null>>({});
+  const [flashSourceKey, setFlashSourceKey] = useState<string | null>(null);
+  const sourceRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { selectedKB, isLoading: kbLoading } = useKnowledgeBase();
   const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -179,13 +195,15 @@ export default function Chat() {
       sources: Array.isArray(msg.citations)
         ? msg.citations.map((citation, idx) => {
             const cite = citation as Record<string, unknown>;
+            const citation_number = typeof cite.citation_number === 'number' ? cite.citation_number : idx + 1;
             const authors = typeof cite.authors === 'string' ? cite.authors : 'Unknown';
             const year = typeof cite.year === 'string' || typeof cite.year === 'number' ? cite.year : 'n.d.';
             const title = typeof cite.title === 'string' ? cite.title : 'Untitled';
-            return {
-              title: `[${idx + 1}] ${authors} (${year}). ${title}`,
-              score: idx + 1,
-            };
+            const doc_id = typeof cite.doc_id === 'string' ? cite.doc_id : '';
+            const snippet = typeof cite.snippet === 'string' ? cite.snippet : undefined;
+            const page = typeof cite.page === 'string' || typeof cite.page === 'number' ? cite.page : null;
+            const section = typeof cite.section === 'string' ? cite.section : null;
+            return { citation_number, authors, year, title, doc_id, snippet, page, section };
           })
         : undefined,
     }));
@@ -218,6 +236,31 @@ export default function Chat() {
       setSessionLoading(false);
     }
   };
+
+  // Inspectable citations: toggle the source panel for `citationNumber` on
+  // `messageId`, then scroll that source card into view and flash-highlight
+  // it -- so clicking an inline [n] chip visibly jumps to its proof.
+  const selectCitation = useCallback((messageId: string, citationNumber: number) => {
+    setActiveCitations((prev) => ({
+      ...prev,
+      [messageId]: prev[messageId] === citationNumber ? null : citationNumber,
+    }));
+
+    const key = `${messageId}-${citationNumber}`;
+    setFlashSourceKey(key);
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    flashTimeoutRef.current = setTimeout(() => setFlashSourceKey(null), 1400);
+
+    requestAnimationFrame(() => {
+      sourceRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    };
+  }, []);
 
   const handleClearSession = () => {
     setActiveSession(null);
@@ -296,8 +339,14 @@ export default function Chat() {
 
       const assistantContent = response.answer;
       const sources: Message['sources'] = response.sources?.map(source => ({
-        title: `[${source.citation_number}] ${source.authors} (${source.year}). ${source.title}`,
-        score: source.citation_number,
+        citation_number: source.citation_number,
+        authors: source.authors,
+        year: source.year,
+        title: source.title,
+        doc_id: source.doc_id,
+        snippet: source.snippet,
+        page: source.page ?? null,
+        section: source.section ?? null,
       }));
       const complexity: Message['complexity'] = response.complexity;
       const pipelineStats: Message['pipelineStats'] = response.pipeline_stats;
@@ -308,6 +357,9 @@ export default function Chat() {
         year: source.year,
         title: source.title,
         doc_id: source.doc_id,
+        snippet: source.snippet,
+        page: source.page ?? null,
+        section: source.section ?? null,
       }));
 
       const assistantMessage: Message = {
@@ -532,7 +584,16 @@ export default function Chat() {
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-secondary/50'
                         }`}>
-                          <p className="whitespace-pre-wrap text-left">{message.content}</p>
+                          {message.role === 'assistant' ? (
+                            <CitedAnswer
+                              answer={message.content}
+                              sources={message.sources}
+                              activeCitation={activeCitations[message.id] ?? null}
+                              onSelectCitation={(citationNumber) => selectCitation(message.id, citationNumber)}
+                            />
+                          ) : (
+                            <p className="whitespace-pre-wrap text-left">{message.content}</p>
+                          )}
                         </Card>
 
                         {/* Complexity Badge and Pipeline Stats */}
@@ -617,12 +678,57 @@ export default function Chat() {
                         {message.sources && message.sources.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-border/50">
                             <span className="text-xs text-muted-foreground block mb-2">{t('chat.references')}:</span>
-                            <div className="space-y-1">
-                              {message.sources.map((source, idx) => (
-                                <p key={idx} className="text-xs text-muted-foreground">
-                                  {source.title}
-                                </p>
-                              ))}
+                            <div className="space-y-1.5">
+                              {message.sources.map((source) => {
+                                const sourceKey = `${message.id}-${source.citation_number}`;
+                                const isOpen = activeCitations[message.id] === source.citation_number;
+                                const isFlashing = flashSourceKey === sourceKey;
+                                return (
+                                  <div
+                                    key={source.citation_number}
+                                    ref={(el) => { sourceRefs.current[sourceKey] = el; }}
+                                    className={`rounded-lg border bg-secondary/20 transition-colors duration-300 ${
+                                      isFlashing ? 'border-primary ring-2 ring-primary/50' : 'border-border/60'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => selectCitation(message.id, source.citation_number)}
+                                      aria-expanded={isOpen}
+                                      aria-label={t('chat.view_source', { number: source.citation_number })}
+                                      className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                      <span className="font-mono text-primary shrink-0">[{source.citation_number}]</span>
+                                      <span className="flex-1">
+                                        {source.title} — {source.authors} ({source.year})
+                                      </span>
+                                      <ChevronDown
+                                        className={`w-3 h-3 mt-0.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                      />
+                                    </button>
+                                    {isOpen && (
+                                      <div className="px-3 pb-3">
+                                        {source.snippet ? (
+                                          <p className="text-xs leading-relaxed text-foreground/90 bg-background/60 border border-border/40 rounded p-2">
+                                            &ldquo;{source.snippet}&rdquo;
+                                          </p>
+                                        ) : (
+                                          <p className="text-xs italic text-muted-foreground/70">
+                                            {t('chat.no_snippet')}
+                                          </p>
+                                        )}
+                                        {(source.page != null || source.section) && (
+                                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                            {source.page != null && t('chat.page_label', { page: source.page })}
+                                            {source.page != null && source.section && ' · '}
+                                            {source.section}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
