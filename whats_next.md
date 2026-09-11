@@ -3,6 +3,8 @@
 **Original Goal:** Production-grade multi-tenant retrieval/RAG platform (Retrievo), live as **Humbowo** at **humbowo.com** on infrastructure Shaun controls.
 
 ## Now
+1. DECISION (Shaun): EU-resident inference? Storage/DB are EU but embeddings+chat run on OpenAI/xAI in the US. Options: add EU-hosted model (Mistral-in-EU or self-hosted on Hetzner) as default/"EU-only" tier, vs. keep US inference with louder disclosure. Real GDPR objection AND a potential wedge — blocks nothing else, but decides the product ceiling
+2. Finish + deploy inspectable citations (agent in flight), then browser-verify the full chat proof flow
 1. Remove deprecated legacy endpoints + old chroma/BM25-pickle code paths after a soak period
 2. Retrieval quality vs baseline (recall@5 0.50/MRR 0.50 on thesis corpus): Cohere reranker (needs key), chunking A/B — measured via scripts/run_semantic_eval.py
 2. Bulk-import feature (uploader lessons: token refresh, filename quoting, dedupe, progress) — OCR/queue/claim-limit items DONE
@@ -31,6 +33,7 @@
 - (nothing)
 
 ## Done
+- 2026-09-11: Hero demo loop fixed (types once, auto-reveals source); site critique assessed
 - 2026-09-10: Brand identity (Citation-Bracket logo, favicons, OG image) + market-grade evidence-first landing page live
 - 2026-09-10: Phase 3c — Stripe billing live & E2E-verified (checkout/portal/webhook plan sync); ORIGINAL ROADMAP COMPLETE (Phases 0–6)
 - 2026-09-09: Phase 6 — bulk-import queue UI + public workspaces (anonymous demo browsing live, legacy collection retired from UI)
